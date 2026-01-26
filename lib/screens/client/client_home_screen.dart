@@ -2,12 +2,68 @@ import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
+import 'create_request_screen.dart';
+import 'request_history_screen.dart';
+import 'client_profile_screen.dart';
 
-class ClientHomeScreen extends StatelessWidget {
+class ClientHomeScreen extends StatefulWidget {
+  final UserModel user;
+
+  const ClientHomeScreen({super.key, required this.user});
+
+  @override
+  State<ClientHomeScreen> createState() => _ClientHomeScreenState();
+}
+
+class _ClientHomeScreenState extends State<ClientHomeScreen> {
+  int _currentIndex = 0;
+
+  late final List<Widget> _screens;
+
+  @override
+  void initState() {
+    super.initState();
+    _screens = [
+      _HomeTab(user: widget.user),
+      RequestHistoryScreen(user: widget.user),
+      ClientProfileScreen(user: widget.user),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: _screens[_currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
+        selectedItemColor: Colors.blue,
+        unselectedItemColor: Colors.grey,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'Inicio',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.history),
+            label: 'Historial',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Perfil',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ==================== TAB DE INICIO ====================
+class _HomeTab extends StatelessWidget {
   final UserModel user;
   final _authService = AuthService();
 
-  ClientHomeScreen({super.key, required this.user});
+  _HomeTab({required this.user});
 
   void _logout(BuildContext context) {
     _authService.logout();
@@ -43,10 +99,15 @@ class ClientHomeScreen extends StatelessWidget {
                     CircleAvatar(
                       radius: 30,
                       backgroundColor: Colors.blue,
-                      child: Text(
-                        user.fullName[0].toUpperCase(),
-                        style: const TextStyle(fontSize: 24, color: Colors.white),
-                      ),
+                      backgroundImage: user.profilePhotoUrl != null
+                          ? NetworkImage(user.profilePhotoUrl!)
+                          : null,
+                      child: user.profilePhotoUrl == null
+                          ? Text(
+                              user.fullName[0].toUpperCase(),
+                              style: const TextStyle(fontSize: 24, color: Colors.white),
+                            )
+                          : null,
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -62,14 +123,9 @@ class ClientHomeScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            user.email,
+                            user.sector ?? 'Sin ubicación',
                             style: TextStyle(color: Colors.grey[600]),
                           ),
-                          if (user.phone != null)
-                            Text(
-                              user.phone!,
-                              style: TextStyle(color: Colors.grey[600]),
-                            ),
                         ],
                       ),
                     ),
@@ -119,12 +175,16 @@ class ClientHomeScreen extends StatelessWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Buscar técnico...')),
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CreateRequestScreen(user: user),
+            ),
           );
         },
-        icon: const Icon(Icons.search),
-        label: const Text('Buscar Técnico'),
+        icon: const Icon(Icons.add),
+        label: const Text('Nueva Solicitud'),
+        backgroundColor: Colors.blue,
       ),
     );
   }
@@ -147,8 +207,14 @@ class _ServiceCard extends StatelessWidget {
       elevation: 2,
       child: InkWell(
         onTap: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Buscando $title...')),
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CreateRequestScreen(
+                user: context.findAncestorWidgetOfExactType<_HomeTab>()!.user,
+                preselectedService: title,
+              ),
+            ),
           );
         },
         borderRadius: BorderRadius.circular(12),

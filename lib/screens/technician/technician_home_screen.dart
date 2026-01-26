@@ -2,12 +2,74 @@ import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
+import 'available_requests_screen.dart';
+import 'my_quotations_screen.dart';
+import 'technician_profile_screen.dart';
 
-class TechnicianHomeScreen extends StatelessWidget {
+class TechnicianHomeScreen extends StatefulWidget {
+  final UserModel user;
+
+  const TechnicianHomeScreen({super.key, required this.user});
+
+  @override
+  State<TechnicianHomeScreen> createState() => _TechnicianHomeScreenState();
+}
+
+class _TechnicianHomeScreenState extends State<TechnicianHomeScreen> {
+  int _currentIndex = 0;
+
+  late final List<Widget> _screens;
+
+  @override
+  void initState() {
+    super.initState();
+    _screens = [
+      _HomeTab(user: widget.user),
+      AvailableRequestsScreen(user: widget.user),
+      MyQuotationsScreen(user: widget.user),
+      TechnicianProfileScreen(user: widget.user),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: _screens[_currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
+        selectedItemColor: Colors.orange,
+        unselectedItemColor: Colors.grey,
+        type: BottomNavigationBarType.fixed,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'Inicio',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.work_outline),
+            label: 'Solicitudes',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.description),
+            label: 'Mis Cotizaciones',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Perfil',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ==================== TAB DE INICIO ====================
+class _HomeTab extends StatelessWidget {
   final UserModel user;
   final _authService = AuthService();
 
-  TechnicianHomeScreen({super.key, required this.user});
+  _HomeTab({required this.user});
 
   void _logout(BuildContext context) {
     _authService.logout();
@@ -35,6 +97,7 @@ class TechnicianHomeScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Tarjeta de perfil
             Card(
               color: Colors.orange[50],
               child: Padding(
@@ -44,10 +107,15 @@ class TechnicianHomeScreen extends StatelessWidget {
                     CircleAvatar(
                       radius: 30,
                       backgroundColor: Colors.orange,
-                      child: Text(
-                        user.fullName[0].toUpperCase(),
-                        style: const TextStyle(fontSize: 24, color: Colors.white),
-                      ),
+                      backgroundImage: user.profilePhotoUrl != null
+                          ? NetworkImage(user.profilePhotoUrl!)
+                          : null,
+                      child: user.profilePhotoUrl == null
+                          ? Text(
+                              user.fullName[0].toUpperCase(),
+                              style: const TextStyle(fontSize: 24, color: Colors.white),
+                            )
+                          : null,
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -66,11 +134,13 @@ class TechnicianHomeScreen extends StatelessWidget {
                             children: [
                               Icon(Icons.build, size: 16, color: Colors.orange[700]),
                               const SizedBox(width: 4),
-                              Text(
-                                user.specialty ?? 'Técnico',
-                                style: TextStyle(
-                                  color: Colors.orange[700],
-                                  fontWeight: FontWeight.w500,
+                              Expanded(
+                                child: Text(
+                                  user.specialty ?? 'Técnico',
+                                  style: TextStyle(
+                                    color: Colors.orange[700],
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
                             ],
@@ -100,47 +170,110 @@ class TechnicianHomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
 
-            const Row(
+            // Estadísticas
+            Row(
               children: [
                 Expanded(
                   child: _StatCard(
-                    icon: Icons.assignment,
-                    title: 'Trabajos',
-                    value: '12',
+                    icon: Icons.description,
+                    title: 'Cotizaciones',
+                    value: '8',
                     color: Colors.blue,
+                    onTap: () {
+                      // Cambiar a pestaña de cotizaciones
+                      final homeState = context.findAncestorStateOfType<_TechnicianHomeScreenState>();
+                      homeState?.setState(() {
+                        homeState._currentIndex = 2;
+                      });
+                    },
                   ),
                 ),
-                SizedBox(width: 12),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _StatCard(
+                    icon: Icons.check_circle,
+                    title: 'Aceptadas',
+                    value: '3',
+                    color: Colors.green,
+                    onTap: () {},
+                  ),
+                ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: _StatCard(
                     icon: Icons.star,
                     title: 'Calificación',
                     value: '4.8',
                     color: Colors.amber,
+                    onTap: () {},
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 24),
 
-            const Text(
-              'Solicitudes Recientes',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-
-            const _RequestCard(
-              clientName: 'Juan Pérez',
-              service: 'Reparación de tubería',
-              time: 'Hace 2 horas',
-              address: 'Av. Principal 123',
+            // Acciones rápidas
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Acciones Rápidas',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                TextButton(
+                  onPressed: () {
+                    final homeState = context.findAncestorStateOfType<_TechnicianHomeScreenState>();
+                    homeState?.setState(() {
+                      homeState._currentIndex = 1;
+                    });
+                  },
+                  child: const Text('Ver todas'),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
-            const _RequestCard(
-              clientName: 'María González',
-              service: 'Instalación de lavamanos',
-              time: 'Hace 5 horas',
-              address: 'Calle Secundaria 456',
+
+            // Cards de acciones
+            _ActionCard(
+              icon: Icons.work_outline,
+              title: 'Solicitudes Disponibles',
+              subtitle: 'Encuentra nuevos trabajos',
+              color: Colors.blue,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AvailableRequestsScreen(user: user),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            _ActionCard(
+              icon: Icons.description,
+              title: 'Mis Cotizaciones',
+              subtitle: 'Revisa tus cotizaciones enviadas',
+              color: Colors.orange,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => MyQuotationsScreen(user: user),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            _ActionCard(
+              icon: Icons.history,
+              title: 'Historial de Trabajos',
+              subtitle: 'Trabajos completados',
+              color: Colors.green,
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Próximamente')),
+                );
+              },
             ),
           ],
         ),
@@ -149,112 +282,118 @@ class TechnicianHomeScreen extends StatelessWidget {
   }
 }
 
+// ==================== STAT CARD ====================
 class _StatCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String value;
   final Color color;
+  final VoidCallback? onTap;
 
   const _StatCard({
     required this.icon,
     required this.title,
     required this.value,
     required this.color,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Icon(icon, size: 32, color: color),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Icon(icon, size: 32, color: color),
+              const SizedBox(height: 8),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            Text(
-              title,
-              style: TextStyle(color: Colors.grey[600]),
-            ),
-          ],
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _RequestCard extends StatelessWidget {
-  final String clientName;
-  final String service;
-  final String time;
-  final String address;
+// ==================== ACTION CARD ====================
+class _ActionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
 
-  const _RequestCard({
-    required this.clientName,
-    required this.service,
-    required this.time,
-    required this.address,
+  const _ActionCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  clientName,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+      elevation: 2,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                Text(
-                  time,
-                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                child: Icon(icon, color: color, size: 28),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(service, style: const TextStyle(fontSize: 14)),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(Icons.location_on, size: 14, color: Colors.grey[600]),
-                const SizedBox(width: 4),
-                Text(address, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {},
-                    child: const Text('Rechazar'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {},
-                    child: const Text('Aceptar'),
-                  ),
-                ),
-              ],
-            ),
-          ],
+              ),
+              Icon(Icons.arrow_forward_ios, color: Colors.grey[400], size: 18),
+            ],
+          ),
         ),
       ),
     );

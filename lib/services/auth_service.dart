@@ -1,7 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_model.dart';
+import '../models/image_data.dart';
 import 'storage_service.dart';
-import '../models/image_data.dart'; // Import the correct file where ImageData is defined, adjust the path as needed
 
 class AuthService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -16,55 +16,10 @@ class AuthService {
     try {
       print('📝 Iniciando registro para: ${user.email}');
       
-      // 1. PRIMERO subir la foto (sin autenticación)
-      String? photoUrl;
-      if (profileImageData != null) {
-        try {
-          // Generar nombre temporal único
-          final timestamp = DateTime.now().millisecondsSinceEpoch;
-          final fileName = 'temp_${timestamp}_${profileImageData.name}';
-          
-          await _supabase.storage
-            .from('profile-images')
-            .uploadBinary(
-              fileName,
-              profileImageData.bytes,
-              fileOptions: FileOptions(
-                contentType: 'image/jpeg',
-                upsert: false,
-              ),
-            );
-
-          photoUrl = _supabase.storage
-            .from('profile-images')
-            .getPublicUrl(fileName);
-          
-          print('✅ Foto subida: $photoUrl');
-        } catch (e) {
-          print('❌ Error al subir foto: $e');
-          // Continuamos sin foto si falla
-        }
-      }
-
-      // 2. Preparar metadata para el trigger
-      final metadata = {
-        'full_name': user.fullName,
-        'role': user.role.name,
-        'phone': user.phone,
-        'address': user.sector, // Se guarda como 'address' en BD
-        if (user.specialty != null) 'specialty': user.specialty,
-        if (user.cedula != null) 'cedula': user.cedula,
-        if (photoUrl != null) 'profile_image_url': photoUrl,
-      };
-
-      print('📤 Registrando usuario con metadata: $metadata');
-
-      // 3. Crear usuario en Supabase Auth
-      // El trigger creará el perfil cuando confirme email
+      // 1. Crear usuario en Supabase Auth
       final AuthResponse authResponse = await _supabase.auth.signUp(
         email: user.email,
         password: password,
-        data: metadata,
       );
 
       if (authResponse.user == null) {
@@ -76,15 +31,39 @@ class AuthService {
 
       print('✅ Usuario creado en Auth: ${authResponse.user!.id}');
 
-      // 4. Si es técnico, guardar datos adicionales para crear después
-      // (Se crearán cuando confirme el email)
-      if (user.role == UserRole.technician && user.specialty != null) {
-        print('ℹ️ Técnico registrado. Los datos se completarán al confirmar email.');
+      // 2. Subir foto PRIMERO (si existe)
+      String? photoUrl;
+      if (profileImageData != null) {
+        try {
+          photoUrl = await _storageService.uploadProfilePhoto(
+            profileImageData,
+            authResponse.user!.id,
+          );
+          print('✅ Foto subida: $photoUrl');
+        } catch (e) {
+          print('⚠️ Error al subir foto: $e');
+          // Continuamos sin foto
+        }
       }
+
+      // 3. Crear perfil usando función RPC (bypasea RLS)
+      final rpcResult = await _supabase.rpc('create_user_profile', params: {
+        'user_id': authResponse.user!.id,
+        'user_email': user.email,
+        'user_full_name': user.fullName,
+        'user_phone': user.phone,
+        'user_role': user.role.name,
+        'user_address': user.sector,
+        'user_specialty': user.specialty,
+        'user_cedula': user.cedula,
+        'user_profile_image_url': photoUrl,
+      });
+
+      print('✅ Perfil creado: $rpcResult');
 
       return {
         'success': true,
-        'message': '✅ Cuenta creada. Revisa tu email para confirmar tu cuenta.',
+        'message': '✅ Registro exitoso. Revisa tu email para verificar tu cuenta.',
       };
       
     } on AuthException catch (e) {
@@ -99,66 +78,6 @@ class AuthService {
         'success': false,
         'message': 'Error al registrar usuario: ${e.toString()}',
       };
-    }
-  }
-
-  // ==================== COMPLETAR PERFIL DE TÉCNICO ====================
-  // Esta función se llama después del primer login
-  Future<void> _completeTechnicianProfile(String userId, String specialty) async {
-    try {
-      // Buscar o crear la especialidad
-      final specialtyResponse = await _supabase
-          .from('specialties')
-          .select('id')
-          .eq('name', specialty)
-          .maybeSingle();
-
-      int? specialtyId = specialtyResponse?['id'];
-
-      // Si no existe la especialidad, crearla
-      if (specialtyId == null) {
-        final newSpecialty = await _supabase
-            .from('specialties')
-            .insert({'name': specialty})
-            .select('id')
-            .single();
-        specialtyId = newSpecialty['id'];
-      }
-
-      // Verificar si ya existe la relación
-      final existingRelation = await _supabase
-          .from('technician_specialties')
-          .select('id')
-          .eq('technician_id', userId)
-          .maybeSingle();
-
-      if (existingRelation == null) {
-        // Asociar técnico con especialidad
-        await _supabase.from('technician_specialties').insert({
-          'technician_id': userId,
-          'specialty_id': specialtyId,
-          'experience_years': 0,
-        });
-
-        // Crear registro de verificación pendiente
-        final existingVerification = await _supabase
-            .from('technician_verification')
-            .select('id')
-            .eq('technician_id', userId)
-            .maybeSingle();
-
-        if (existingVerification == null) {
-          await _supabase.from('technician_verification').insert({
-            'technician_id': userId,
-            'status': 'pending',
-          });
-        }
-
-        print('✅ Datos de técnico completados');
-      }
-    } catch (e) {
-      print('⚠️ Error al completar perfil de técnico: $e');
-      // No lanzamos error para no bloquear el login
     }
   }
 
@@ -191,29 +110,7 @@ class AuthService {
 
       print('✅ Perfil obtenido: ${profileData['full_name']}');
 
-      // 3. Si es técnico, obtener especialidades y completar perfil si falta
-      String? specialty;
-      String? cedula = profileData['cedula'];
-      
-      if (profileData['role'] == 'technician') {
-        final techSpecialties = await _supabase
-            .from('technician_specialties')
-            .select('specialty_id, specialties(name)')
-            .eq('technician_id', response.user!.id)
-            .maybeSingle();
-
-        if (techSpecialties != null) {
-          specialty = techSpecialties['specialties']['name'];
-        } else {
-          // Si no tiene especialidad en la tabla pero sí en metadata, completar
-          specialty = profileData['specialty'];
-          if (specialty != null) {
-            await _completeTechnicianProfile(response.user!.id, specialty);
-          }
-        }
-      }
-
-      // 4. Crear modelo de usuario
+      // 3. Crear modelo de usuario
       final user = UserModel(
         id: profileData['id'],
         email: profileData['email'],
@@ -221,8 +118,8 @@ class AuthService {
         role: UserRole.values.firstWhere((e) => e.name == profileData['role']),
         phone: profileData['phone'],
         sector: profileData['address'],
-        specialty: specialty ?? profileData['specialty'],
-        cedula: cedula,
+        specialty: profileData['specialty'],
+        cedula: profileData['cedula'],
         profilePhotoUrl: profileData['profile_image_url'],
       );
 
@@ -259,21 +156,6 @@ class AuthService {
           .eq('id', session.user.id)
           .single();
 
-      String? specialty;
-      if (profileData['role'] == 'technician') {
-        final techSpecialties = await _supabase
-            .from('technician_specialties')
-            .select('specialty_id, specialties(name)')
-            .eq('technician_id', session.user.id)
-            .maybeSingle();
-
-        if (techSpecialties != null) {
-          specialty = techSpecialties['specialties']['name'];
-        } else {
-          specialty = profileData['specialty'];
-        }
-      }
-
       return UserModel(
         id: profileData['id'],
         email: profileData['email'],
@@ -281,7 +163,7 @@ class AuthService {
         role: UserRole.values.firstWhere((e) => e.name == profileData['role']),
         phone: profileData['phone'],
         sector: profileData['address'],
-        specialty: specialty,
+        specialty: profileData['specialty'],
         cedula: profileData['cedula'],
         profilePhotoUrl: profileData['profile_image_url'],
       );

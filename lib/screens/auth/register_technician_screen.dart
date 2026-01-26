@@ -122,23 +122,44 @@ class _RegisterTechnicianScreenState extends State<RegisterTechnicianScreen> {
       final result = await _authService.register(
         tempUser,
         _passwordController.text,
-        _profileImageData,
+        _profileImageData, // Ahora usa ImageData directamente
       );
 
       setState(() => _isLoading = false);
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result['message']),
-          backgroundColor: result['success'] ? Colors.green : Colors.red,
-        ),
-      );
-
       if (result['success']) {
-        Navigator.pop(context);
-        Navigator.pop(context);
+        // Mostrar diálogo de éxito
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: const Text('✅ ¡Registro exitoso!'),
+            content: const Text(
+              'Te hemos enviado un email de confirmación.\n\n'
+              'Por favor, revisa tu bandeja de entrada y confirma tu cuenta '
+              'para poder iniciar sesión como técnico.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context); // Cerrar diálogo
+                  Navigator.pop(context); // Volver a selección
+                  Navigator.pop(context); // Volver a login
+                },
+                child: const Text('Entendido'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message']),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     } catch (e) {
       setState(() => _isLoading = false);
@@ -173,7 +194,7 @@ class _RegisterTechnicianScreenState extends State<RegisterTechnicianScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Foto de perfil - Funciona en web y móvil
+                // Foto de perfil
                 Center(
                   child: GestureDetector(
                     onTap: _pickImage,
