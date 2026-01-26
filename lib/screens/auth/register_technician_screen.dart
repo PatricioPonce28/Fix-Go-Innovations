@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
+import '../../models/image_data.dart';
 import '../../services/auth_service.dart';
+import '../../services/storage_service.dart';
 
 class RegisterTechnicianScreen extends StatefulWidget {
   const RegisterTechnicianScreen({super.key});
@@ -14,12 +16,19 @@ class _RegisterTechnicianScreenState extends State<RegisterTechnicianScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   final _phoneController = TextEditingController();
   final _cedulaController = TextEditingController();
+  final _otherSpecialtyController = TextEditingController();
   final _authService = AuthService();
+  final _storageService = StorageService();
+  
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
+  ImageData? _profileImageData;
   String? _selectedSpecialty;
+  bool _showOtherSpecialty = false;
 
   final List<String> _specialties = [
     'Plomero',
@@ -30,6 +39,7 @@ class _RegisterTechnicianScreenState extends State<RegisterTechnicianScreen> {
     'Pintor',
     'Técnico de Aires Acondicionados',
     'Mecánico',
+    'Otro',
   ];
 
   @override
@@ -37,42 +47,109 @@ class _RegisterTechnicianScreenState extends State<RegisterTechnicianScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     _phoneController.dispose();
     _cedulaController.dispose();
+    _otherSpecialtyController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Tomar foto'),
+              onTap: () async {
+                Navigator.pop(context);
+                final imageData = await _storageService.takePhoto();
+                if (imageData != null) {
+                  setState(() => _profileImageData = imageData);
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Elegir de galería'),
+              onTap: () async {
+                Navigator.pop(context);
+                final imageData = await _storageService.pickImageFromGallery();
+                if (imageData != null) {
+                  setState(() => _profileImageData = imageData);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
 
+    if (_profileImageData == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor, toma una foto de perfil'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
-    final user = UserModel(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      email: _emailController.text.trim(),
-      fullName: _nameController.text.trim(),
-      role: UserRole.technician,
-      phone: _phoneController.text.trim(),
-      specialty: _selectedSpecialty,
-      cedula: _cedulaController.text.trim(),
-    );
+    try {
+      // Determinar la especialidad final
+      final String finalSpecialty = _showOtherSpecialty
+          ? _otherSpecialtyController.text.trim()
+          : _selectedSpecialty!;
 
-    final result = await _authService.register(user, _passwordController.text);
+      final tempUser = UserModel(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        email: _emailController.text.trim(),
+        fullName: _nameController.text.trim(),
+        role: UserRole.technician,
+        phone: _phoneController.text.trim(),
+        specialty: finalSpecialty,
+        cedula: _cedulaController.text.trim(),
+      );
 
-    setState(() => _isLoading = false);
+      final result = await _authService.register(
+        tempUser,
+        _passwordController.text,
+        _profileImageData,
+      );
 
-    if (!mounted) return;
+      setState(() => _isLoading = false);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(result['message']),
-        backgroundColor: result['success'] ? Colors.green : Colors.red,
-      ),
-    );
+      if (!mounted) return;
 
-    if (result['success']) {
-      Navigator.pop(context);
-      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message']),
+          backgroundColor: result['success'] ? Colors.green : Colors.red,
+        ),
+      );
+
+      if (result['success']) {
+        Navigator.pop(context);
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -96,17 +173,43 @@ class _RegisterTechnicianScreenState extends State<RegisterTechnicianScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(
-                  Icons.build,
-                  size: 60,
-                  color: Colors.orange,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Crear cuenta de Técnico',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
+                // Foto de perfil - Funciona en web y móvil
+                Center(
+                  child: GestureDetector(
+                    onTap: _pickImage,
+                    child: Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.grey[200],
+                        border: Border.all(color: Colors.orange, width: 3),
+                      ),
+                      child: _profileImageData != null
+                          ? ClipOval(
+                              child: Image.memory(
+                                _profileImageData!.bytes,
+                                fit: BoxFit.cover,
+                              ),
+                            )
+                          : Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.camera_alt, size: 40, color: Colors.grey[600]),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Tomar foto',
+                                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                                ),
+                              ],
+                            ),
+                    ),
                   ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Toca para tomar tu foto de perfil',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
@@ -119,7 +222,7 @@ class _RegisterTechnicianScreenState extends State<RegisterTechnicianScreen> {
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Ingresa tu nombre';
+                      return 'Ingresa tu nombre completo';
                     }
                     return null;
                   },
@@ -173,15 +276,46 @@ class _RegisterTechnicianScreenState extends State<RegisterTechnicianScreen> {
                 const SizedBox(height: 16),
 
                 TextFormField(
+                  controller: _confirmPasswordController,
+                  obscureText: _obscureConfirmPassword,
+                  decoration: InputDecoration(
+                    labelText: 'Confirmar contraseña',
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
+                      ),
+                      onPressed: () {
+                        setState(() => _obscureConfirmPassword = !_obscureConfirmPassword);
+                      },
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Confirma tu contraseña';
+                    }
+                    if (value != _passwordController.text) {
+                      return 'Las contraseñas no coinciden';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                TextFormField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(
                     labelText: 'Teléfono',
                     prefixIcon: Icon(Icons.phone_outlined),
+                    hintText: 'Ej: 0999999999',
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Ingresa tu teléfono';
+                    }
+                    if (value.length < 10) {
+                      return 'Teléfono inválido';
                     }
                     return null;
                   },
@@ -194,10 +328,14 @@ class _RegisterTechnicianScreenState extends State<RegisterTechnicianScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Cédula de Identidad',
                     prefixIcon: Icon(Icons.badge_outlined),
+                    hintText: 'Ej: 1234567890',
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Ingresa tu cédula';
+                    }
+                    if (value.length != 10) {
+                      return 'La cédula debe tener 10 dígitos';
                     }
                     return null;
                   },
@@ -217,7 +355,10 @@ class _RegisterTechnicianScreenState extends State<RegisterTechnicianScreen> {
                     );
                   }).toList(),
                   onChanged: (value) {
-                    setState(() => _selectedSpecialty = value);
+                    setState(() {
+                      _selectedSpecialty = value;
+                      _showOtherSpecialty = value == 'Otro';
+                    });
                   },
                   validator: (value) {
                     if (value == null) {
@@ -226,6 +367,25 @@ class _RegisterTechnicianScreenState extends State<RegisterTechnicianScreen> {
                     return null;
                   },
                 ),
+                
+                if (_showOtherSpecialty) ...[
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _otherSpecialtyController,
+                    decoration: const InputDecoration(
+                      labelText: 'Especifica tu especialidad',
+                      prefixIcon: Icon(Icons.edit_outlined),
+                      hintText: 'Ej: Jardinero, Técnico de piscinas',
+                    ),
+                    validator: (value) {
+                      if (_showOtherSpecialty && (value == null || value.isEmpty)) {
+                        return 'Especifica tu especialidad';
+                      }
+                      return null;
+                    },
+                  ),
+                ],
+                
                 const SizedBox(height: 32),
 
                 SizedBox(

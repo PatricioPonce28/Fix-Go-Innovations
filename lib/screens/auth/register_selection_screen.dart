@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'register_client_screen.dart';
-import 'register_technician_screen.dart';
+import 'register_client_screen.dart' as client;
+import 'register_technician_screen.dart' as technician;
 
 class RegisterSelectionScreen extends StatelessWidget  {
   const RegisterSelectionScreen({super.key});
@@ -50,7 +50,7 @@ class RegisterSelectionScreen extends StatelessWidget  {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const RegisterClientScreen(),
+                        builder: (_) => const client.RegisterClientScreen(),
                       ),
                     );
                   },
@@ -67,7 +67,7 @@ class RegisterSelectionScreen extends StatelessWidget  {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const RegisterTechnicianScreen(),
+                        builder: (_) => const technician.RegisterTechnicianScreen(),
                       ),
                     );
                   },

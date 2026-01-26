@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
+import '../../models/image_data.dart';
 import '../../services/auth_service.dart';
+import '../../services/storage_service.dart';
 
 class RegisterClientScreen extends StatefulWidget {
   const RegisterClientScreen({super.key});
@@ -14,52 +16,118 @@ class _RegisterClientScreenState extends State<RegisterClientScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _addressController = TextEditingController();
+  final _sectorController = TextEditingController();
   final _authService = AuthService();
+  final _storageService = StorageService();
+  
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
+  ImageData? _profileImageData;
 
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     _phoneController.dispose();
-    _addressController.dispose();
+    _sectorController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Tomar foto'),
+              onTap: () async {
+                Navigator.pop(context);
+                final imageData = await _storageService.takePhoto();
+                if (imageData != null) {
+                  setState(() => _profileImageData = imageData);
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Elegir de galería'),
+              onTap: () async {
+                Navigator.pop(context);
+                final imageData = await _storageService.pickImageFromGallery();
+                if (imageData != null) {
+                  setState(() => _profileImageData = imageData);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
 
+    if (_profileImageData == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor, toma una foto de perfil'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
-    final user = UserModel(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      email: _emailController.text.trim(),
-      fullName: _nameController.text.trim(),
-      role: UserRole.client,
-      phone: _phoneController.text.trim(),
-      address: _addressController.text.trim(),
-    );
+    try {
+      final tempUser = UserModel(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        email: _emailController.text.trim(),
+        fullName: _nameController.text.trim(),
+        role: UserRole.client,
+        phone: _phoneController.text.trim(),
+        sector: _sectorController.text.trim(),
+      );
 
-    final result = await _authService.register(user, _passwordController.text);
+      final result = await _authService.register(
+        tempUser,
+        _passwordController.text,
+        _profileImageData,
+      );
 
-    setState(() => _isLoading = false);
+      setState(() => _isLoading = false);
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(result['message']),
-        backgroundColor: result['success'] ? Colors.green : Colors.red,
-      ),
-    );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message']),
+          backgroundColor: result['success'] ? Colors.green : Colors.red,
+        ),
+      );
 
-    if (result['success']) {
-      Navigator.pop(context);
-      Navigator.pop(context);
+      if (result['success']) {
+        Navigator.pop(context);
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -83,17 +151,43 @@ class _RegisterClientScreenState extends State<RegisterClientScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(
-                  Icons.person,
-                  size: 60,
-                  color: Colors.blue,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Crear cuenta de Cliente',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
+                // Foto de perfil - Funciona en web y móvil
+                Center(
+                  child: GestureDetector(
+                    onTap: _pickImage,
+                    child: Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.grey[200],
+                        border: Border.all(color: Colors.blue, width: 3),
+                      ),
+                      child: _profileImageData != null
+                          ? ClipOval(
+                              child: Image.memory(
+                                _profileImageData!.bytes,
+                                fit: BoxFit.cover,
+                              ),
+                            )
+                          : Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.camera_alt, size: 40, color: Colors.grey[600]),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Tomar foto',
+                                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                                ),
+                              ],
+                            ),
+                    ),
                   ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Toca para tomar tu foto de perfil',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
@@ -106,7 +200,7 @@ class _RegisterClientScreenState extends State<RegisterClientScreen> {
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Ingresa tu nombre';
+                      return 'Ingresa tu nombre completo';
                     }
                     return null;
                   },
@@ -160,15 +254,26 @@ class _RegisterClientScreenState extends State<RegisterClientScreen> {
                 const SizedBox(height: 16),
 
                 TextFormField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Teléfono',
-                    prefixIcon: Icon(Icons.phone_outlined),
+                  controller: _confirmPasswordController,
+                  obscureText: _obscureConfirmPassword,
+                  decoration: InputDecoration(
+                    labelText: 'Confirmar contraseña',
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
+                      ),
+                      onPressed: () {
+                        setState(() => _obscureConfirmPassword = !_obscureConfirmPassword);
+                      },
+                    ),
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Ingresa tu teléfono';
+                      return 'Confirma tu contraseña';
+                    }
+                    if (value != _passwordController.text) {
+                      return 'Las contraseñas no coinciden';
                     }
                     return null;
                   },
@@ -176,14 +281,35 @@ class _RegisterClientScreenState extends State<RegisterClientScreen> {
                 const SizedBox(height: 16),
 
                 TextFormField(
-                  controller: _addressController,
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(
-                    labelText: 'Dirección',
-                    prefixIcon: Icon(Icons.location_on_outlined),
+                    labelText: 'Teléfono',
+                    prefixIcon: Icon(Icons.phone_outlined),
+                    hintText: 'Ej: 0999999999',
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Ingresa tu dirección';
+                      return 'Ingresa tu teléfono';
+                    }
+                    if (value.length < 10) {
+                      return 'Teléfono inválido';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                TextFormField(
+                  controller: _sectorController,
+                  decoration: const InputDecoration(
+                    labelText: 'Sector donde vives',
+                    prefixIcon: Icon(Icons.location_on_outlined),
+                    hintText: 'Ej: Norte de Quito, La Carolina',
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Ingresa tu sector';
                     }
                     return null;
                   },

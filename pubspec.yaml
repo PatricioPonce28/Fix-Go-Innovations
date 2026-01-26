@@ -21,6 +21,10 @@ dependencies:
   # Utilidades
   cupertino_icons: ^1.0.2
 
+  # Cámara y permisos
+  image_picker: ^1.0.7
+  permission_handler: ^11.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
