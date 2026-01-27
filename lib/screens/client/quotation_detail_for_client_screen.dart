@@ -2,17 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/quotation_model.dart';
 import '../../models/service_request_model.dart';
+import '../../models/user_model.dart'; // Agregar
+import '../../models/work_and_chat_models.dart'; // Agregar
 import '../../services/quotation_service.dart';
+import '../../services/work_and_chat_service.dart'; // Agregar
+import 'work_coordination_screen.dart'; // Agregar
 
 class QuotationDetailForClientScreen extends StatefulWidget {
   final Quotation quotation;
   final ServiceRequest request;
+  final UserModel user; // Agregar
   final VoidCallback onStatusChanged;
 
   const QuotationDetailForClientScreen({
     super.key,
     required this.quotation,
     required this.request,
+    required this.user, // Agregar
     required this.onStatusChanged,
   });
 
@@ -24,6 +30,7 @@ class QuotationDetailForClientScreen extends StatefulWidget {
 class _QuotationDetailForClientScreenState
     extends State<QuotationDetailForClientScreen> {
   final _quotationService = QuotationService();
+  final _workService = WorkService(); // Agregar
   bool _isLoading = false;
 
   bool get _isExpired => widget.quotation.isExpired;
@@ -39,7 +46,8 @@ class _QuotationDetailForClientScreenState
           'Al aceptar esta cotización:\n\n'
           '• Se rechazarán automáticamente las demás cotizaciones\n'
           '• El técnico será notificado\n'
-          '• Podrán coordinar los detalles del trabajo\n\n'
+          '• Podrán coordinar los detalles del trabajo\n'
+          '• Serás redirigido al chat y sistema de pago\n\n'
           '¿Deseas continuar?',
         ),
         actions: [
@@ -63,7 +71,8 @@ class _QuotationDetailForClientScreenState
 
     setState(() => _isLoading = true);
 
-    final success = await _quotationService.acceptQuotation(
+    // ✅ USAR NUEVO MÉTODO QUE DEVUELVE EL TRABAJO CREADO
+    final result = await _quotationService.acceptQuotationWithNavigation(
       widget.quotation.id,
     );
 
@@ -71,36 +80,77 @@ class _QuotationDetailForClientScreenState
 
     if (!mounted) return;
 
-    if (success) {
+    if (result['success']) {
+      // 🔴 NUEVO: Navegar directamente al chat/pago
+      await _navigateToWorkCoordination(result['work']);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${result['error']}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // 🔴 NUEVO: Navegar a coordinación
+  Future<void> _navigateToWorkCoordination(
+      Map<String, dynamic> workData) async {
+    try {
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (context) => AlertDialog(
           title: const Text('✅ ¡Cotización Aceptada!'),
-          content: const Text(
-            'Has aceptado esta cotización exitosamente.\n\n'
-            'El técnico ha sido notificado y podrán coordinar '
-            'los detalles del trabajo.',
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              const Text('Redirigiendo al chat y pago...'),
+              const SizedBox(height: 8),
+              Text(
+                'Total: \$${workData['payment_amount']?.toStringAsFixed(2) ?? '0.00'}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
+                ),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context); // Cerrar diálogo
-                Navigator.pop(context); // Volver a lista
-                widget.onStatusChanged();
-              },
-              child: const Text('Entendido'),
-            ),
-          ],
         ),
       );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Error al aceptar cotización'),
-          backgroundColor: Colors.red,
+
+      await Future.delayed(const Duration(seconds: 1));
+
+      if (!mounted) return;
+
+      Navigator.of(context).pop(); // Cerrar diálogo de carga
+
+      // Navegar a la pantalla de coordinación
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (context) => WorkCoordinationScreen(
+            work: AcceptedWork.fromJson(workData),
+            request: widget.request,
+            currentUser: widget.user,
+            isClient: true,
+          ),
         ),
+        (route) => false, // Limpiar todo el stack
       );
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al navegar: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        Navigator.pop(context); // Volver atrás
+      }
     }
   }
 
@@ -162,6 +212,38 @@ class _QuotationDetailForClientScreenState
     }
   }
 
+  // 🔴 NUEVO: Botón para ver chat/pago si ya está aceptada
+  void _goToChatAndPayment() async {
+    setState(() => _isLoading = true);
+
+    final work = await _workService.getWorkByQuotation(widget.quotation.id);
+
+    setState(() => _isLoading = false);
+
+    if (!mounted) return;
+
+    if (work != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => WorkCoordinationScreen(
+            work: work,
+            request: widget.request,
+            currentUser: widget.user,
+            isClient: true,
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se encontró el trabajo. Intenta más tarde.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   Color _getStatusColor(QuotationStatus status) {
     switch (status) {
       case QuotationStatus.pending:
@@ -181,437 +263,537 @@ class _QuotationDetailForClientScreenState
       appBar: AppBar(
         title: const Text('Detalle de Cotización'),
         centerTitle: true,
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Estado de la cotización
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: _getStatusColor(widget.quotation.status)
-                    .withOpacity(0.1),
-                border: Border(
-                  bottom: BorderSide(
-                    color: _getStatusColor(widget.quotation.status),
-                    width: 3,
-                  ),
-                ),
+        actions: [
+          // 🔴 NUEVO: Botón para ir al chat si ya está aceptada
+          if (widget.quotation.status == QuotationStatus.accepted)
+            IconButton(
+              icon: const Badge(
+                child: Icon(Icons.chat),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.quotation.status.displayName,
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: _getStatusColor(widget.quotation.status),
-                        ),
-                      ),
-                      if (_isExpired &&
-                          widget.quotation.status == QuotationStatus.pending)
-                        const Text(
-                          'Esta cotización ha vencido',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.red,
-                          ),
-                        ),
-                    ],
-                  ),
-                  Text(
-                    widget.quotation.quotationNumber,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey[700],
-                    ),
-                  ),
-                ],
-              ),
+              onPressed: _isLoading ? null : _goToChatAndPayment,
+              tooltip: 'Ir al Chat y Pago',
             ),
-
-            Padding(
-              padding: const EdgeInsets.all(16),
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Información del Técnico
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            '👨‍🔧 Técnico',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                  // Estado de la cotización
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(widget.quotation.status)
+                          .withOpacity(0.1),
+                      border: Border(
+                        bottom: BorderSide(
+                          color: _getStatusColor(widget.quotation.status),
+                          width: 3,
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.quotation.status.displayName,
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: _getStatusColor(widget.quotation.status),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 30,
-                                backgroundColor: Colors.blue[700],
-                                child: const Icon(
-                                  Icons.person,
-                                  color: Colors.white,
-                                  size: 30,
+                            if (_isExpired &&
+                                widget.quotation.status ==
+                                    QuotationStatus.pending)
+                              const Text(
+                                'Esta cotización ha vencido',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.red,
                                 ),
                               ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      widget.quotation.technicianName,
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
+                          ],
+                        ),
+                        Text(
+                          widget.quotation.quotationNumber,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 🔴 NUEVO: Mensaje especial si está aceptada
+                        if (widget.quotation.status == QuotationStatus.accepted)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.green[50],
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.green),
+                            ),
+                            child: Column(
+                              children: [
+                                Icon(
+                                  Icons.celebration,
+                                  size: 48,
+                                  color: Colors.green[700],
+                                ),
+                                const SizedBox(height: 12),
+                                const Text(
+                                  '✅ ¡Cotización Aceptada!',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.green,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'Ahora puedes coordinar el trabajo con el técnico',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.green,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 50,
+                                  child: ElevatedButton.icon(
+                                    onPressed: _goToChatAndPayment,
+                                    icon: const Icon(Icons.chat),
+                                    label: const Text(
+                                      '💬 Ir al Chat y 💳 Pago',
+                                      style: TextStyle(fontSize: 16),
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.orange,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
                                       ),
                                     ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'RUC: ${widget.quotation.technicianRuc ?? 'No especificado'}',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                        // Información del Técnico
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  '👨‍🔧 Técnico',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 30,
+                                      backgroundColor: Colors.blue[700],
+                                      child: const Icon(
+                                        Icons.person,
+                                        color: Colors.white,
+                                        size: 30,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            widget.quotation.technicianName,
+                                            style: const TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'RUC: ${widget.quotation.technicianRuc ?? 'No especificado'}',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Solución Propuesta
+                        const Text(
+                          '📋 Solución Propuesta',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.quotation.solutionTitle,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  widget.quotation.workDescription,
+                                  style: const TextStyle(fontSize: 15),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Materiales
+                        if (widget.quotation.includedMaterials != null) ...[
+                          const Text(
+                            '🔧 Materiales Incluidos',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(
+                                widget.quotation.includedMaterials!,
+                                style: const TextStyle(fontSize: 15),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+
+                        // Mano de Obra
+                        const Text(
+                          '👨‍🔧 Mano de Obra',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(
+                              widget.quotation.estimatedLabor,
+                              style: const TextStyle(fontSize: 15),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Condiciones Especiales
+                        if (widget.quotation.specialConditions != null) ...[
+                          const Text(
+                            'ℹ️ Condiciones Especiales',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Card(
+                            color: Colors.amber[50],
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(
+                                widget.quotation.specialConditions!,
+                                style: const TextStyle(fontSize: 15),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+
+                        // Desglose de Costos
+                        const Text(
+                          '💰 Desglose de Costos',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              children: [
+                                _CostRow(
+                                  label: 'Materiales',
+                                  value: widget.quotation.materialsSubtotal,
+                                ),
+                                const Divider(),
+                                _CostRow(
+                                  label: 'Mano de Obra',
+                                  value: widget.quotation.laborSubtotal,
+                                ),
+                                const Divider(),
+                                _CostRow(
+                                  label: 'Subtotal',
+                                  value: widget.quotation.materialsSubtotal +
+                                      widget.quotation.laborSubtotal,
+                                ),
+                                if (widget.quotation.taxAmount > 0) ...[
+                                  const Divider(),
+                                  _CostRow(
+                                    label: 'IVA (15%)',
+                                    value: widget.quotation.taxAmount,
+                                  ),
+                                ],
+                                const Divider(thickness: 2),
+                                _CostRow(
+                                  label: 'TOTAL',
+                                  value: widget.quotation.totalAmount,
+                                  isTotal: true,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Información Adicional
+                        const Text(
+                          '📌 Información Adicional',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              children: [
+                                _InfoRow(
+                                  icon: Icons.timer,
+                                  label: 'Tiempo Estimado',
+                                  value: widget.quotation.estimatedTime,
+                                ),
+                                const Divider(),
+                                _InfoRow(
+                                  icon: Icons.calendar_today,
+                                  label: 'Fecha de Envío',
+                                  value: DateFormat('dd/MM/yyyy', 'es_ES')
+                                      .format(widget.quotation.createdAt),
+                                ),
+                                if (widget.quotation.expiresAt != null) ...[
+                                  const Divider(),
+                                  _InfoRow(
+                                    icon: _isExpired
+                                        ? Icons.warning
+                                        : Icons.event_available,
+                                    label: 'Válida Hasta',
+                                    value: DateFormat('dd/MM/yyyy', 'es_ES')
+                                        .format(widget.quotation.expiresAt!),
+                                    valueColor:
+                                        _isExpired ? Colors.red : Colors.green,
+                                  ),
+                                ],
+                                if (widget.quotation.warrantyOffered !=
+                                    null) ...[
+                                  const Divider(),
+                                  _InfoRow(
+                                    icon: Icons.verified_user,
+                                    label: 'Garantía',
+                                    value: widget.quotation.warrantyOffered!,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        // Notas Adicionales
+                        if (widget.quotation.additionalNotes != null) ...[
+                          const SizedBox(height: 16),
+                          const Text(
+                            '📝 Notas Adicionales',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Card(
+                            color: Colors.blue[50],
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(
+                                widget.quotation.additionalNotes!,
+                                style: const TextStyle(fontSize: 15),
+                              ),
+                            ),
+                          ),
+                        ],
+
+                        const SizedBox(height: 24),
+
+                        // Botones de Acción
+                        if (_canDecide) ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed:
+                                      _isLoading ? null : _rejectQuotation,
+                                  icon: const Icon(Icons.close),
+                                  label: const Text('Rechazar'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.red,
+                                    side: const BorderSide(color: Colors.red),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 16),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                flex: 2,
+                                child: ElevatedButton.icon(
+                                  onPressed:
+                                      _isLoading ? null : _acceptQuotation,
+                                  icon: _isLoading
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : const Icon(Icons.check_circle),
+                                  label: Text(
+                                    _isLoading
+                                        ? 'Procesando...'
+                                        : '✅ Aceptar e Ir al Chat',
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.green,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 16),
+                                  ),
                                 ),
                               ),
                             ],
                           ),
                         ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
 
-                  // Solución Propuesta
-                  const Text(
-                    '📋 Solución Propuesta',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.quotation.solutionTitle,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                        // 🔴 NUEVO: Acceso rápido desde cotizaciones aceptadas
+                        if (widget.quotation.status ==
+                            QuotationStatus.accepted) ...[
+                          const SizedBox(height: 16),
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.blue[50],
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.blue),
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            widget.quotation.workDescription,
-                            style: const TextStyle(fontSize: 15),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Materiales
-                  if (widget.quotation.includedMaterials != null) ...[
-                    const Text(
-                      '🔧 Materiales Incluidos',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(
-                          widget.quotation.includedMaterials!,
-                          style: const TextStyle(fontSize: 15),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-
-                  // Mano de Obra
-                  const Text(
-                    '👨‍🔧 Mano de Obra',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        widget.quotation.estimatedLabor,
-                        style: const TextStyle(fontSize: 15),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Condiciones Especiales
-                  if (widget.quotation.specialConditions != null) ...[
-                    const Text(
-                      'ℹ️ Condiciones Especiales',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Card(
-                      color: Colors.amber[50],
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(
-                          widget.quotation.specialConditions!,
-                          style: const TextStyle(fontSize: 15),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-
-                  // Desglose de Costos
-                  const Text(
-                    '💰 Desglose de Costos',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          _CostRow(
-                            label: 'Materiales',
-                            value: widget.quotation.materialsSubtotal,
-                          ),
-                          const Divider(),
-                          _CostRow(
-                            label: 'Mano de Obra',
-                            value: widget.quotation.laborSubtotal,
-                          ),
-                          const Divider(),
-                          _CostRow(
-                            label: 'Subtotal',
-                            value: widget.quotation.materialsSubtotal +
-                                widget.quotation.laborSubtotal,
-                          ),
-                          if (widget.quotation.taxAmount > 0) ...[
-                            const Divider(),
-                            _CostRow(
-                              label: 'IVA (15%)',
-                              value: widget.quotation.taxAmount,
-                            ),
-                          ],
-                          const Divider(thickness: 2),
-                          _CostRow(
-                            label: 'TOTAL',
-                            value: widget.quotation.totalAmount,
-                            isTotal: true,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Información Adicional
-                  const Text(
-                    '📌 Información Adicional',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          _InfoRow(
-                            icon: Icons.timer,
-                            label: 'Tiempo Estimado',
-                            value: widget.quotation.estimatedTime,
-                          ),
-                          const Divider(),
-                          _InfoRow(
-                            icon: Icons.calendar_today,
-                            label: 'Fecha de Envío',
-                            value: DateFormat('dd/MM/yyyy', 'es_ES')
-                                .format(widget.quotation.createdAt),
-                          ),
-                          if (widget.quotation.expiresAt != null) ...[
-                            const Divider(),
-                            _InfoRow(
-                              icon: _isExpired
-                                  ? Icons.warning
-                                  : Icons.event_available,
-                              label: 'Válida Hasta',
-                              value: DateFormat('dd/MM/yyyy', 'es_ES')
-                                  .format(widget.quotation.expiresAt!),
-                              valueColor:
-                                  _isExpired ? Colors.red : Colors.green,
-                            ),
-                          ],
-                          if (widget.quotation.warrantyOffered != null) ...[
-                            const Divider(),
-                            _InfoRow(
-                              icon: Icons.verified_user,
-                              label: 'Garantía',
-                              value: widget.quotation.warrantyOffered!,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // Notas Adicionales
-                  if (widget.quotation.additionalNotes != null) ...[
-                    const SizedBox(height: 16),
-                    const Text(
-                      '📝 Notas Adicionales',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Card(
-                      color: Colors.blue[50],
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(
-                          widget.quotation.additionalNotes!,
-                          style: const TextStyle(fontSize: 15),
-                        ),
-                      ),
-                    ),
-                  ],
-
-                  const SizedBox(height: 24),
-
-                  // Botones de Acción
-                  if (_canDecide) ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: _isLoading ? null : _rejectQuotation,
-                            icon: const Icon(Icons.close),
-                            label: const Text('Rechazar'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.red,
-                              side: const BorderSide(color: Colors.red),
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 2,
-                          child: ElevatedButton.icon(
-                            onPressed: _isLoading ? null : _acceptQuotation,
-                            icon: _isLoading
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
+                            child: Column(
+                              children: [
+                                const Text(
+                                  '📱 Acceso Rápido',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        onPressed: _goToChatAndPayment,
+                                        icon: const Icon(Icons.chat),
+                                        label: const Text('Chat'),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.blue,
+                                          side: BorderSide(
+                                              color: Colors.blue.shade300),
+                                        ),
+                                      ),
                                     ),
-                                  )
-                                : const Icon(Icons.check_circle),
-                            label: Text(
-                              _isLoading
-                                  ? 'Procesando...'
-                                  : 'Aceptar Cotización',
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        onPressed: _goToChatAndPayment,
+                                        icon: const Icon(Icons.payment),
+                                        label: const Text('Pago'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.orange,
+                                          foregroundColor: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
-                        ),
+                        ],
+
+                        const SizedBox(height: 16),
                       ],
                     ),
-                  ] else if (widget.quotation.status ==
-                      QuotationStatus.accepted) ...[
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.green[50],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.green),
-                      ),
-                      child: Column(
-                        children: [
-                          Icon(
-                            Icons.check_circle,
-                            size: 48,
-                            color: Colors.green[700],
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Has aceptado esta cotización',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Ahora puedes coordinar con el técnico',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[700],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-
-                  const SizedBox(height: 16),
+                  ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
     );
   }
 }

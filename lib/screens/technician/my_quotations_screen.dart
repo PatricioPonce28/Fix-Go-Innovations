@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/user_model.dart';
 import '../../models/quotation_model.dart';
+import '../../models/service_request_model.dart'; // Agregar
+import '../../models/work_and_chat_models.dart'; // Agregar
 import '../../services/quotation_service.dart';
+import '../../services/work_and_chat_service.dart'; // Agregar
 import 'quotation_detail_screen.dart';
+import '../client/work_coordination_screen.dart';// Agregar
 
 class MyQuotationsScreen extends StatefulWidget {
   final UserModel user;
@@ -16,9 +20,11 @@ class MyQuotationsScreen extends StatefulWidget {
 
 class _MyQuotationsScreenState extends State<MyQuotationsScreen> {
   final _quotationService = QuotationService();
+  final _workService = WorkService(); // Agregar
   List<Quotation> _quotations = [];
   bool _isLoading = true;
-  String _filterStatus = 'all'; // all, pending, accepted, rejected
+  String _filterStatus = 'all';
+  final Map<String, AcceptedWork?> _quotationWorks = {}; // 🔴 NUEVO
 
   @override
   void initState() {
@@ -29,6 +35,15 @@ class _MyQuotationsScreenState extends State<MyQuotationsScreen> {
   Future<void> _loadQuotations() async {
     setState(() => _isLoading = true);
     final quotations = await _quotationService.getTechnicianQuotations();
+    
+    // 🔴 NUEVO: Cargar trabajos para cotizaciones aceptadas
+    for (var quotation in quotations) {
+      if (quotation.status == QuotationStatus.accepted) {
+        final work = await _workService.getWorkByQuotation(quotation.id);
+        _quotationWorks[quotation.id] = work;
+      }
+    }
+    
     setState(() {
       _quotations = quotations;
       _isLoading = false;
@@ -40,6 +55,46 @@ class _MyQuotationsScreenState extends State<MyQuotationsScreen> {
     return _quotations
         .where((q) => q.status.name == _filterStatus)
         .toList();
+  }
+
+  // 🔴 NUEVO: Navegar a coordinación
+  Future<void> _goToWorkCoordination(Quotation quotation) async {
+    final work = _quotationWorks[quotation.id];
+    if (work != null) {
+      // Necesitamos obtener la solicitud también
+      final request = ServiceRequest(
+        id: work.requestId,
+        clientId: '',
+        title: 'Trabajo Aceptado',
+        description: 'Coordinación de trabajo',
+        serviceType: ServiceType.values.first, // Reemplaza por el valor adecuado de tu enum
+        sector: '',
+        exactLocation: '',
+        status: RequestStatus.assigned,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        imageUrls: [],
+      );
+      
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => WorkCoordinationScreen(
+            work: work,
+            request: request,
+            currentUser: widget.user,
+            isClient: false, // Es técnico
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se encontró el trabajo. Intenta más tarde.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Color _getStatusColor(QuotationStatus status) {
@@ -163,6 +218,8 @@ class _MyQuotationsScreenState extends State<MyQuotationsScreen> {
                     itemCount: _filteredQuotations.length,
                     itemBuilder: (context, index) {
                       final quotation = _filteredQuotations[index];
+                      final hasAcceptedWork = _quotationWorks[quotation.id] != null;
+                      
                       return Card(
                         margin: const EdgeInsets.only(bottom: 16),
                         elevation: 3,
@@ -173,6 +230,7 @@ class _MyQuotationsScreenState extends State<MyQuotationsScreen> {
                               MaterialPageRoute(
                                 builder: (_) => QuotationDetailScreen(
                                   quotation: quotation,
+                                  user: widget.user, // 🔴 Agregar
                                 ),
                               ),
                             );
@@ -320,7 +378,7 @@ class _MyQuotationsScreenState extends State<MyQuotationsScreen> {
                                   ],
                                 ),
 
-                                // Mensaje de aceptación
+                                // 🔴 NUEVO: Sección para cotizaciones aceptadas
                                 if (quotation.status == QuotationStatus.accepted) ...[
                                   const SizedBox(height: 12),
                                   Container(
@@ -330,20 +388,75 @@ class _MyQuotationsScreenState extends State<MyQuotationsScreen> {
                                       borderRadius: BorderRadius.circular(8),
                                       border: Border.all(color: Colors.green[200]!),
                                     ),
-                                    child: Row(
+                                    child: Column(
                                       children: [
-                                        Icon(Icons.celebration, color: Colors.green[700], size: 20),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            '¡Felicitaciones! Esta cotización fue aceptada',
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              color: Colors.green[900],
-                                              fontWeight: FontWeight.w500,
+                                        Row(
+                                          children: [
+                                            Icon(Icons.celebration, color: Colors.green[700], size: 20),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                '✅ Cotización Aceptada',
+                                                style: TextStyle(
+                                                  fontSize: 15,
+                                                  color: Colors.green[900],
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
                                             ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'El cliente aceptó tu cotización. Ya puedes coordinar el trabajo.',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: Colors.green[800],
                                           ),
                                         ),
+                                        const SizedBox(height: 12),
+                                        
+                                        // Botones de acción rápida
+                                        if (hasAcceptedWork) ...[
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: OutlinedButton.icon(
+                                                  onPressed: () => _goToWorkCoordination(quotation),
+                                                  icon: const Icon(Icons.chat, size: 16),
+                                                  label: const Text('Ir al Chat'),
+                                                  style: OutlinedButton.styleFrom(
+                                                    foregroundColor: Colors.blue,
+                                                    side: BorderSide(color: Colors.blue.shade300),
+                                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: ElevatedButton.icon(
+                                                  onPressed: () => _goToWorkCoordination(quotation),
+                                                  icon: const Icon(Icons.work, size: 16),
+                                                  label: const Text('Ver Trabajo'),
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: Colors.orange,
+                                                    foregroundColor: Colors.white,
+                                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ] else ...[
+                                          const Text(
+                                            'El trabajo se está creando...',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.orange,
+                                              fontStyle: FontStyle.italic,
+                                            ),
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   ),
@@ -356,19 +469,39 @@ class _MyQuotationsScreenState extends State<MyQuotationsScreen> {
                                 // Botón ver detalles
                                 Align(
                                   alignment: Alignment.centerRight,
-                                  child: TextButton.icon(
-                                    onPressed: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => QuotationDetailScreen(
-                                            quotation: quotation,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      // 🔴 NUEVO: Botón extra para chat si está aceptada
+                                      if (quotation.status == QuotationStatus.accepted && hasAcceptedWork)
+                                        OutlinedButton.icon(
+                                          onPressed: () => _goToWorkCoordination(quotation),
+                                          icon: const Icon(Icons.chat, size: 16),
+                                          label: const Text('Chat'),
+                                          style: OutlinedButton.styleFrom(
+                                            foregroundColor: Colors.blue,
+                                            side: BorderSide(color: Colors.blue.shade300),
                                           ),
                                         ),
-                                      );
-                                    },
-                                    icon: const Icon(Icons.visibility, size: 18),
-                                    label: const Text('Ver Detalles'),
+                                      if (quotation.status == QuotationStatus.accepted && hasAcceptedWork)
+                                        const SizedBox(width: 8),
+                                        
+                                      TextButton.icon(
+                                        onPressed: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => QuotationDetailScreen(
+                                                quotation: quotation,
+                                                user: widget.user,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        icon: const Icon(Icons.visibility, size: 18),
+                                        label: const Text('Ver Detalles'),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],

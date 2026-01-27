@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
+import '../../models/work_and_chat_models.dart';
+import '../../models/service_request_model.dart';
 import '../../services/auth_service.dart';
+import '../../services/work_and_chat_service.dart';
+import '../../services/service_request_service.dart';
 import '../auth/login_screen.dart';
 import 'create_request_screen.dart';
 import 'request_history_screen.dart';
 import 'client_profile_screen.dart';
+import 'work_coordination_screen.dart';
 
 class ClientHomeScreen extends StatefulWidget {
   final UserModel user;
@@ -59,11 +64,45 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
 }
 
 // ==================== TAB DE INICIO ====================
-class _HomeTab extends StatelessWidget {
+class _HomeTab extends StatefulWidget {
   final UserModel user;
-  final _authService = AuthService();
 
-  _HomeTab({required this.user});
+  const _HomeTab({required this.user});
+
+  @override
+  State<_HomeTab> createState() => _HomeTabState();
+}
+
+class _HomeTabState extends State<_HomeTab> {
+  final _authService = AuthService();
+  final _workService = WorkService();
+  final _requestService = ServiceRequestService();
+  
+  List<AcceptedWork> _activeWorks = [];
+  List<ServiceRequest> _pendingRequests = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    
+    final works = await _workService.getClientActiveWorks();
+    final requests = await _requestService.getClientRequests();
+    
+    setState(() {
+      _activeWorks = works;
+      _pendingRequests = requests.where((r) => 
+        r.status == RequestStatus.pending && 
+        (r.quotationsCount ?? 0) > 0
+      ).toList();
+      _isLoading = false;
+    });
+  }
 
   void _logout(BuildContext context) {
     _authService.logout();
@@ -74,103 +113,220 @@ class _HomeTab extends StatelessWidget {
     );
   }
 
+  Future<void> _goToWork(AcceptedWork work) async {
+    // Necesitamos cargar la solicitud
+    final requests = await _requestService.getClientRequests();
+    final request = requests.firstWhere(
+      (r) => r.id == work.requestId,
+      orElse: () => ServiceRequest(
+        id: work.requestId,
+        clientId: work.clientId,
+        title: 'Trabajo en progreso',
+        description: '',
+        serviceType: ServiceType.emergency,
+        sector: '',
+        exactLocation: '',
+        status: RequestStatus.in_progress,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ),
+    );
+
+    if (!mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WorkCoordinationScreen(
+          work: work,
+          request: request,
+          currentUser: widget.user,
+          isClient: true,
+        ),
+      ),
+    ).then((_) => _loadData());
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Inicio - Cliente'),
         actions: [
+          // Badge con trabajos activos
+          if (_activeWorks.isNotEmpty)
+            Stack(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.work),
+                  onPressed: () {
+                    if (_activeWorks.isNotEmpty) {
+                      _goToWork(_activeWorks.first);
+                    }
+                  },
+                ),
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      '${_activeWorks.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadData,
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => _logout(context),
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 30,
-                      backgroundColor: Colors.blue,
-                      backgroundImage: user.profilePhotoUrl != null
-                          ? NetworkImage(user.profilePhotoUrl!)
-                          : null,
-                      child: user.profilePhotoUrl == null
-                          ? Text(
-                              user.fullName[0].toUpperCase(),
-                              style: const TextStyle(fontSize: 24, color: Colors.white),
-                            )
-                          : null,
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '¡Hola, ${user.fullName}!',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            user.sector ?? 'Sin ubicación',
-                            style: TextStyle(color: Colors.grey[600]),
-                          ),
-                        ],
+      body: RefreshIndicator(
+        onRefresh: _loadData,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 30,
+                        backgroundColor: Colors.blue,
+                        backgroundImage: widget.user.profilePhotoUrl != null
+                            ? NetworkImage(widget.user.profilePhotoUrl!)
+                            : null,
+                        child: widget.user.profilePhotoUrl == null
+                            ? Text(
+                                widget.user.fullName[0].toUpperCase(),
+                                style: const TextStyle(fontSize: 24, color: Colors.white),
+                              )
+                            : null,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '¡Hola, ${widget.user.fullName}!',
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              widget.user.sector ?? 'Sin ubicación',
+                              style: TextStyle(color: Colors.grey[600]),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-            
-            const Text(
-              'Servicios Disponibles',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              children: const [
-                _ServiceCard(
-                  icon: Icons.plumbing,
-                  title: 'Plomería',
-                  color: Colors.blue,
-                ),
-                _ServiceCard(
-                  icon: Icons.electrical_services,
-                  title: 'Electricidad',
-                  color: Colors.amber,
-                ),
-                _ServiceCard(
-                  icon: Icons.lock,
-                  title: 'Cerrajería',
-                  color: Colors.orange,
-                ),
-                _ServiceCard(
-                  icon: Icons.construction,
-                  title: 'Albañilería',
-                  color: Colors.brown,
-                ),
+              const SizedBox(height: 24),
+
+              if (_isLoading)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              else ...[
+                // Trabajos Activos
+                if (_activeWorks.isNotEmpty) ...[
+                  const Text(
+                    '🔧 Trabajos Activos',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  ..._activeWorks.map((work) => _ActiveWorkCard(
+                        work: work,
+                        onTap: () => _goToWork(work),
+                      )),
+                  const SizedBox(height: 24),
+                ],
+
+                // Solicitudes con cotizaciones pendientes
+                if (_pendingRequests.isNotEmpty) ...[
+                  const Text(
+                    '📋 Cotizaciones Recibidas',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Tienes ${_pendingRequests.length} solicitud${_pendingRequests.length > 1 ? 'es' : ''} con cotizaciones por revisar',
+                    style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                  ),
+                  const SizedBox(height: 12),
+                  ..._pendingRequests.take(2).map((request) => Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: ListTile(
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.orange[100],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(Icons.description, color: Colors.orange[700]),
+                          ),
+                          title: Text(request.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text('${request.quotationsCount} cotización${(request.quotationsCount ?? 0) > 1 ? 'es' : ''} recibida${(request.quotationsCount ?? 0) > 1 ? 's' : ''}'),
+                          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                          onTap: () {
+                            final homeState = context.findAncestorStateOfType<_ClientHomeScreenState>();
+                            homeState?.setState(() => homeState._currentIndex = 1);
+                          },
+                        ),
+                      )),
+                  const SizedBox(height: 24),
+                ],
               ],
-            ),
-          ],
+
+              const Text(
+                'Servicios Disponibles',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                children: [
+                  _ServiceCard(icon: Icons.plumbing, title: 'Plomería', color: Colors.blue, user: widget.user),
+                  _ServiceCard(icon: Icons.electrical_services, title: 'Electricidad', color: Colors.amber, user: widget.user),
+                  _ServiceCard(icon: Icons.lock, title: 'Cerrajería', color: Colors.orange, user: widget.user),
+                  _ServiceCard(icon: Icons.construction, title: 'Albañilería', color: Colors.brown, user: widget.user),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -178,9 +334,9 @@ class _HomeTab extends StatelessWidget {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => CreateRequestScreen(user: user),
+              builder: (_) => CreateRequestScreen(user: widget.user),
             ),
-          );
+          ).then((_) => _loadData());
         },
         icon: const Icon(Icons.add),
         label: const Text('Nueva Solicitud'),
@@ -190,16 +346,86 @@ class _HomeTab extends StatelessWidget {
   }
 }
 
+class _ActiveWorkCard extends StatelessWidget {
+  final AcceptedWork work;
+  final VoidCallback onTap;
+
+  const _ActiveWorkCard({required this.work, required this.onTap});
+
+  Color _getStatusColor(WorkStatus status) {
+    switch (status) {
+      case WorkStatus.pending_payment:
+        return Colors.orange;
+      case WorkStatus.paid:
+        return Colors.green;
+      case WorkStatus.on_way:
+        return Colors.blue;
+      case WorkStatus.in_progress:
+        return Colors.purple;
+      case WorkStatus.completed:
+        return Colors.teal;
+      case WorkStatus.rated:
+        return Colors.grey;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 3,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _getStatusColor(work.status).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.work, color: _getStatusColor(work.status), size: 32),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      work.status.displayName,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: _getStatusColor(work.status),
+                      ),
+                    ),
+                    Text(
+                      '\$${work.paymentAmount.toStringAsFixed(2)}',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
+                    ),
+                    if (work.status == WorkStatus.pending_payment)
+                      Text('⚠️ Pendiente de pago', style: TextStyle(fontSize: 12, color: Colors.orange[700], fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios, size: 20, color: Colors.grey[400]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ServiceCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final Color color;
+  final UserModel user;
 
-  const _ServiceCard({
-    required this.icon,
-    required this.title,
-    required this.color,
-  });
+  const _ServiceCard({required this.icon, required this.title, required this.color, required this.user});
 
   @override
   Widget build(BuildContext context) {
@@ -210,10 +436,7 @@ class _ServiceCard extends StatelessWidget {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => CreateRequestScreen(
-                user: context.findAncestorWidgetOfExactType<_HomeTab>()!.user,
-                preselectedService: title,
-              ),
+              builder: (_) => CreateRequestScreen(user: user, preselectedService: title),
             ),
           );
         },
@@ -223,13 +446,7 @@ class _ServiceCard extends StatelessWidget {
           children: [
             Icon(icon, size: 48, color: color),
             const SizedBox(height: 8),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ],
         ),
       ),

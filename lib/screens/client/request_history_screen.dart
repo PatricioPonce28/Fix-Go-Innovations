@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/user_model.dart';
 import '../../models/service_request_model.dart';
+import '../../models/work_and_chat_models.dart'; // Agregar
 import '../../services/service_request_service.dart';
+import '../../services/work_and_chat_service.dart'; // Agregar
 import 'quotations_for_request_screen.dart';
 import 'request_detail_screen.dart';
+import 'work_coordination_screen.dart'; // Agregar
 
 class RequestHistoryScreen extends StatefulWidget {
   final UserModel user;
@@ -17,8 +20,10 @@ class RequestHistoryScreen extends StatefulWidget {
 
 class _RequestHistoryScreenState extends State<RequestHistoryScreen> {
   final _requestService = ServiceRequestService();
+  final _workService = WorkService(); // Agregar
   List<ServiceRequest> _requests = [];
   bool _isLoading = true;
+  final Map<String, List<AcceptedWork>> _requestWorks = {}; // 🔴 NUEVO
 
   @override
   void initState() {
@@ -29,10 +34,28 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen> {
   Future<void> _loadRequests() async {
     setState(() => _isLoading = true);
     final requests = await _requestService.getClientRequests();
+    
+    // 🔴 NUEVO: Cargar trabajos aceptados para cada solicitud
+    for (var request in requests) {
+      final works = await _getAcceptedWorksForRequest(request.id);
+      _requestWorks[request.id] = works;
+    }
+    
     setState(() {
       _requests = requests;
       _isLoading = false;
     });
+  }
+
+  // 🔴 NUEVO: Obtener trabajos aceptados de una solicitud
+  Future<List<AcceptedWork>> _getAcceptedWorksForRequest(String requestId) async {
+    try {
+      final response = await _workService.getClientActiveWorks();
+      return response.where((work) => work.requestId == requestId).toList();
+    } catch (e) {
+      print('❌ Error cargando trabajos para request $requestId: $e');
+      return [];
+    }
   }
 
   Future<void> _deleteRequest(String requestId) async {
@@ -69,6 +92,21 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen> {
     }
   }
 
+  // 🔴 NUEVO: Navegar a coordinación
+  Future<void> _goToWorkCoordination(AcceptedWork work, ServiceRequest request) async {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => WorkCoordinationScreen(
+          work: work,
+          request: request,
+          currentUser: widget.user,
+          isClient: true,
+        ),
+      ),
+    );
+  }
+
   Color _getStatusColor(RequestStatus status) {
     switch (status) {
       case RequestStatus.pending:
@@ -82,6 +120,100 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen> {
       case RequestStatus.cancelled:
         return Colors.red;
     }
+  }
+
+  IconData _getWorkStatusIcon(String status) {
+    switch (status.toLowerCase()) {
+      case 'accepted':
+        return Icons.check_circle;
+      case 'in_progress':
+        return Icons.hourglass_bottom;
+      case 'completed':
+        return Icons.done_all;
+      case 'cancelled':
+        return Icons.cancel;
+      default:
+        return Icons.info;
+    }
+  }
+
+  // 🔴 NUEVO: Widget para trabajos aceptados
+  Widget _buildAcceptedWorkCard(AcceptedWork work, ServiceRequest request) {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.green[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.green[200]!),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(
+                _getWorkStatusIcon(work.status.displayName),
+                color: Colors.green[700],
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      work.status.displayName,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green[700],
+                      ),
+                    ),
+                    Text(
+                      'Total: \$${work.paymentAmount.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.green[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _goToWorkCoordination(work, request),
+                  icon: const Icon(Icons.chat, size: 16),
+                  label: const Text('Chat'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.blue,
+                    side: BorderSide(color: Colors.blue.shade300),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _goToWorkCoordination(work, request),
+                  icon: const Icon(Icons.payment, size: 16),
+                  label: const Text('Pago'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -123,6 +255,8 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen> {
                     itemBuilder: (context, index) {
                       final request = _requests[index];
                       final quotationsCount = request.quotationsCount ?? 0;
+                      final acceptedWorks = _requestWorks[request.id] ?? [];
+                      final hasAcceptedWork = acceptedWorks.isNotEmpty;
                       
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),
@@ -187,6 +321,36 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen> {
                                       ],
                                     ),
                                     const SizedBox(height: 8),
+
+                                    // 🔴 NUEVO: Indicador de trabajos aceptados
+                                    if (hasAcceptedWork)
+                                      Container(
+                                        margin: const EdgeInsets.only(bottom: 8),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.orange[50],
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(color: Colors.orange),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.work, size: 16, color: Colors.orange[700]),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              'Trabajo en progreso',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.orange[700],
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
 
                                     // Descripción
                                     Text(
@@ -268,6 +432,14 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen> {
                                           ],
                                         ),
                                       ),
+                                    ],
+
+                                    // 🔴 NUEVO: Mostrar trabajos aceptados
+                                    if (hasAcceptedWork) ...[
+                                      const SizedBox(height: 12),
+                                      ...acceptedWorks.map((work) => 
+                                        _buildAcceptedWorkCard(work, request)
+                                      ).toList(),
                                     ],
 
                                     // Imágenes preview

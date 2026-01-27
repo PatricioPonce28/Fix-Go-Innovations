@@ -32,7 +32,8 @@ class QuotationService {
       }
 
       // Generar número de cotización
-      final quotationNumberResult = await _supabase.rpc('generate_quotation_number');
+      final quotationNumberResult =
+          await _supabase.rpc('generate_quotation_number');
       final quotationNumber = quotationNumberResult as String;
 
       // Calcular fecha de expiración
@@ -112,9 +113,8 @@ class QuotationService {
               .select('image_url')
               .eq('request_id', item['id']);
 
-          final imageUrls = imagesResponse
-              .map((img) => img['image_url'] as String)
-              .toList();
+          final imageUrls =
+              imagesResponse.map((img) => img['image_url'] as String).toList();
 
           requests.add(ServiceRequest.fromJson({
             ...item,
@@ -170,8 +170,7 @@ class QuotationService {
     try {
       await _supabase
           .from('quotations')
-          .update({'status': 'accepted'})
-          .eq('id', quotationId);
+          .update({'status': 'accepted'}).eq('id', quotationId);
       return true;
     } catch (e) {
       print('❌ Error al aceptar cotización: $e');
@@ -179,17 +178,146 @@ class QuotationService {
     }
   }
 
-  // ==================== RECHAZAR COTIZACIÓN (CLIENTE) ====================
+// ==================== RECHAZAR COTIZACIÓN (CLIENTE) ====================
   Future<bool> rejectQuotation(String quotationId) async {
     try {
       await _supabase
           .from('quotations')
-          .update({'status': 'rejected'})
-          .eq('id', quotationId);
+          .update({'status': 'rejected'}).eq('id', quotationId);
       return true;
     } catch (e) {
       print('❌ Error al rechazar cotización: $e');
       return false;
+    }
+  }
+
+// ==================== ACEPTAR COTIZACIÓN CON NAVEGACIÓN ====================
+  Future<Map<String, dynamic>> acceptQuotationWithNavigation(
+      String quotationId) async {
+    try {
+      print('🔄 [CHAT] Aceptando cotización: $quotationId');
+
+      // 1. Obtener datos de la cotización antes de aceptar
+      final quotation = await _supabase
+          .from('quotations')
+          .select('*')
+          .eq('id', quotationId)
+          .single();
+
+      print('📋 [CHAT] Datos obtenidos:');
+      print('  - Status: ${quotation['status']}');
+      print('  - Total: ${quotation['total_amount']}');
+
+      // 2. Aceptar cotización
+      await _supabase
+          .from('quotations')
+          .update({'status': 'accepted'}).eq('id', quotationId);
+
+      print('✅ [CHAT] Cotización aceptada en DB');
+
+      // 3. Esperar a que el trigger cree el trabajo
+      print('⏳ [CHAT] Esperando creación del trabajo...');
+      await Future.delayed(const Duration(seconds: 2));
+
+      // 4. Buscar el trabajo creado
+      final work = await _supabase
+          .from('accepted_works')
+          .select('*')
+          .eq('quotation_id', quotationId)
+          .single();
+
+      print('🎉 [CHAT] Trabajo encontrado: ${work['id']}');
+
+      return {
+        'success': true,
+        'work': work,
+        'message': 'Cotización aceptada. Redirigiendo al chat...',
+      };
+    } catch (e) {
+      print('❌ [CHAT] Error: $e');
+
+      // Intentar crear manualmente si falla el trigger
+      print('🛠️ [CHAT] Intentando crear trabajo manualmente...');
+      try {
+        final quotation = await _supabase
+            .from('quotations')
+            .select('*')
+            .eq('id', quotationId)
+            .single();
+
+        final totalAmount = quotation['total_amount'] as double;
+        final platformFee = totalAmount * 0.10;
+        final technicianAmount = totalAmount - platformFee;
+
+        final manualWork = await _supabase
+            .from('accepted_works')
+            .insert({
+              'request_id': quotation['request_id'],
+              'quotation_id': quotationId,
+              'client_id': quotation['client_id'],
+              'technician_id': quotation['technician_id'],
+              'status': 'pending_payment',
+              'payment_amount': totalAmount,
+              'platform_fee': platformFee,
+              'technician_amount': technicianAmount,
+              'payment_status': 'pending',
+            })
+            .select()
+            .single();
+
+        print('✅ [CHAT] Trabajo creado manualmente: ${manualWork['id']}');
+
+        return {
+          'success': true,
+          'work': manualWork,
+          'message': 'Trabajo creado manualmente',
+        };
+      } catch (e2) {
+        print('❌ [CHAT] Error manual también: $e2');
+        return {
+          'success': false,
+          'error': e.toString(),
+          'message': 'Error completo: $e2',
+        };
+      }
+    }
+  }
+
+// AGREGAR ESTE MÉTODO
+  Future<Map<String, dynamic>> acceptQuotationWithNavigation(
+      String quotationId) async {
+    try {
+      // 1. Aceptar la cotización
+      await _supabase
+          .from('quotations')
+          .update({'status': 'accepted'}).eq('id', quotationId);
+
+      // 2. Esperar a que el trigger cree el accepted_work
+      await Future.delayed(const Duration(seconds: 1));
+
+      // 3. Obtener el trabajo creado
+      final workResponse = await _supabase
+          .from('accepted_works')
+          .select('*')
+          .eq('quotation_id', quotationId)
+          .maybeSingle();
+
+      if (workResponse != null) {
+        return {
+          'success': true,
+          'work': workResponse,
+        };
+      } else {
+        return {
+          'success': false,
+          'error': 'No se pudo crear el trabajo. Intenta más tarde.',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Error: ${e.toString()}',
+      };
     }
   }
 }
