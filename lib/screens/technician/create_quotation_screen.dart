@@ -52,7 +52,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
   void initState() {
     super.initState();
     _solutionTitleController.text = 'Solución a: ${widget.request.title}';
-    
+
     // Listeners para recalcular totales
     _materialsSubtotalController.addListener(_updateTotals);
     _laborSubtotalController.addListener(_updateTotals);
@@ -332,7 +332,8 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
 
               TextFormField(
                 controller: _materialsSubtotalController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
                 ],
@@ -356,7 +357,8 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
 
               TextFormField(
                 controller: _laborSubtotalController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
                 ],
@@ -527,7 +529,8 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                       : const Icon(Icons.send),
                   label: Text(
                     _isLoading ? 'Enviando...' : 'Enviar Cotización',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.orange,
@@ -550,3 +553,37 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
 // ==================== COST ROW ====================
 class _CostRow extends StatelessWidget {
   final String label;
+  final double value;
+final bool isTotal;
+const _CostRow({
+required this.label,
+required this.value,
+this.isTotal = false,
+});
+@override
+Widget build(BuildContext context) {
+return Padding(
+padding: const EdgeInsets.symmetric(vertical: 4),
+child: Row(
+mainAxisAlignment: MainAxisAlignment.spaceBetween,
+children: [
+Text(
+label,
+style: TextStyle(
+fontSize: isTotal ? 18 : 15,
+fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+),
+),
+Text(
+'\$${value.toStringAsFixed(2)}',
+style: TextStyle(
+fontSize: isTotal ? 20 : 16,
+fontWeight: isTotal ? FontWeight.bold : FontWeight.w500,
+color: isTotal ? Colors.blue[900] : null,
+),
+),
+],
+),
+);
+}
+}

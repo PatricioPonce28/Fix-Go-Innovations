@@ -14,6 +14,7 @@ class ServiceRequest {
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? completedAt;
+  final int? quotationsCount; // ← AGREGAR ESTE CAMPO
 
   ServiceRequest({
     required this.id,
@@ -31,6 +32,7 @@ class ServiceRequest {
     required this.createdAt,
     required this.updatedAt,
     this.completedAt,
+    this.quotationsCount, // ← AGREGAR ESTE CAMPO
   });
 
   factory ServiceRequest.fromJson(Map<String, dynamic> json) {
@@ -60,6 +62,7 @@ class ServiceRequest {
       completedAt: json['completed_at'] != null
           ? DateTime.parse(json['completed_at'])
           : null,
+      quotationsCount: json['quotations_count'], // ← AGREGAR ESTE CAMPO
     );
   }
 
@@ -76,6 +79,7 @@ class ServiceRequest {
       'availability_time': availabilityTime,
       'status': status.name,
       'assigned_technician_id': assignedTechnicianId,
+      'quotations_count': quotationsCount, // ← AGREGAR ESTE CAMPO
     };
   }
 }
