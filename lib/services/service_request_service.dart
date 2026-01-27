@@ -22,6 +22,8 @@ class ServiceRequestService {
         return {'success': false, 'message': 'Usuario no autenticado'};
       }
 
+      print('📝 Creando solicitud para usuario: $userId');
+
       // 1. Crear solicitud
       final requestData = {
         'client_id': userId,
@@ -33,7 +35,10 @@ class ServiceRequestService {
         'availability_date': availabilityDate?.toIso8601String(),
         'availability_time': availabilityTime,
         'status': 'pending',
+        'quotations_count': 0, // ← CAMPO AGREGADO
       };
+
+      print('📤 Datos a insertar: $requestData');
 
       final response = await _supabase
           .from('service_requests')
@@ -46,6 +51,7 @@ class ServiceRequestService {
 
       // 2. Subir imágenes si existen
       if (images != null && images.isNotEmpty) {
+        print('📸 Subiendo ${images.length} imágenes...');
         await _uploadRequestImages(requestId, images);
       }
 
@@ -69,21 +75,27 @@ class ServiceRequestService {
       final image = images[i];
       final fileName = '${requestId}_${i}_${DateTime.now().millisecondsSinceEpoch}.jpg';
       
-      // Subir a Storage
-      await _supabase.storage
-          .from('service-request-images')
-          .uploadBinary(fileName, image.bytes);
+      try {
+        // Subir a Storage
+        await _supabase.storage
+            .from('service-request-images')
+            .uploadBinary(fileName, image.bytes);
 
-      // Obtener URL pública
-      final imageUrl = _supabase.storage
-          .from('service-request-images')
-          .getPublicUrl(fileName);
+        // Obtener URL pública
+        final imageUrl = _supabase.storage
+            .from('service-request-images')
+            .getPublicUrl(fileName);
 
-      // Guardar en BD
-      await _supabase.from('service_request_images').insert({
-        'request_id': requestId,
-        'image_url': imageUrl,
-      });
+        // Guardar en BD
+        await _supabase.from('service_request_images').insert({
+          'request_id': requestId,
+          'image_url': imageUrl,
+        });
+
+        print('✅ Imagen ${i + 1} subida correctamente');
+      } catch (e) {
+        print('❌ Error al subir imagen ${i + 1}: $e');
+      }
     }
   }
 
@@ -91,13 +103,20 @@ class ServiceRequestService {
   Future<List<ServiceRequest>> getClientRequests() async {
     try {
       final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) return [];
+      if (userId == null) {
+        print('❌ No hay usuario autenticado');
+        return [];
+      }
+
+      print('👤 Obteniendo solicitudes del cliente: $userId');
 
       final response = await _supabase
           .from('service_requests')
           .select('*')
           .eq('client_id', userId)
           .order('created_at', ascending: false);
+
+      print('📋 Solicitudes del cliente encontradas: ${response.length}');
 
       final requests = <ServiceRequest>[];
       for (var item in response) {
@@ -131,6 +150,7 @@ class ServiceRequestService {
           .from('service_requests')
           .update(updates)
           .eq('id', requestId);
+      print('✅ Solicitud actualizada: $requestId');
       return true;
     } catch (e) {
       print('❌ Error al actualizar solicitud: $e');
@@ -145,6 +165,7 @@ class ServiceRequestService {
           .from('service_requests')
           .delete()
           .eq('id', requestId);
+      print('✅ Solicitud eliminada: $requestId');
       return true;
     } catch (e) {
       print('❌ Error al eliminar solicitud: $e');
