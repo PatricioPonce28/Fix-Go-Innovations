@@ -49,8 +49,10 @@ class _ChatTabState extends State<ChatTab> {
   }
 
   Future<void> _loadMessages() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     final messages = await _chatService.getMessages(widget.workId);
+    if (!mounted) return;
     setState(() {
       _messages = messages;
       _isLoading = false;
@@ -78,6 +80,7 @@ class _ChatTabState extends State<ChatTab> {
   }
 
   Future<void> _sendMessage() async {
+    if (!mounted) return;
     final text = _messageController.text.trim();
     if (text.isEmpty || _isSending) return;
 
@@ -88,6 +91,7 @@ class _ChatTabState extends State<ChatTab> {
       messageText: text,
     );
 
+    if (!mounted) return;
     setState(() => _isSending = false);
 
     if (success) {

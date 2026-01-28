@@ -1,5 +1,6 @@
 import 'package:vibration/vibration.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter/material.dart';
 
 /// 📳 Servicio de Notificaciones del Sistema con Vibración
 class NotificationSystemService {
@@ -90,6 +91,54 @@ class NotificationSystemService {
       print('✅ Notificación de cotización mostrada');
     } catch (e) {
       print('❌ Error mostrando notificación: $e');
+    }
+  }
+
+  /// 🎉 Notificación cuando una cotización es aceptada
+  Future<void> showQuotationAcceptedNotification({
+    required String clientName,
+    required double amount,
+    required String quotationId,
+  }) async {
+    try {
+      // Vibrar con patrón de "éxito" (cotización aceptada)
+      await _vibrate(pattern: [100, 100, 100, 100, 200, 200]);
+
+      const AndroidNotificationDetails androidPlatformChannelSpecifics =
+          AndroidNotificationDetails(
+        'quotation_accepted_channel',
+        'Cotizaciones Aceptadas',
+        channelDescription: 'Notificaciones cuando aceptan tus cotizaciones',
+        importance: Importance.max,
+        priority: Priority.high,
+        enableVibration: true,
+        color: Color.fromARGB(255, 76, 175, 80), // Verde
+      );
+
+      const DarwinNotificationDetails iosPlatformChannelSpecifics =
+          DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      const NotificationDetails platformChannelSpecifics =
+          NotificationDetails(
+        android: androidPlatformChannelSpecifics,
+        iOS: iosPlatformChannelSpecifics,
+      );
+
+      await _flutterLocalNotificationsPlugin.show(
+        2,
+        '🎉 ¡Cotización Aceptada!',
+        '$clientName aceptó tu cotización de \$$amount',
+        platformChannelSpecifics,
+        payload: 'quotation_accepted_$quotationId',
+      );
+
+      print('✅ Notificación de cotización aceptada mostrada');
+    } catch (e) {
+      print('❌ Error mostrando notificación de aceptación: $e');
     }
   }
 
@@ -264,6 +313,100 @@ class NotificationSystemService {
       print('✅ Todas las notificaciones canceladas');
     } catch (e) {
       print('❌ Error cancelando notificaciones: $e');
+    }
+  }
+
+  /// 💬 Notificación de nuevo mensaje en chat
+  Future<void> showChatMessageNotification({
+    required String senderName,
+    required String messagePreview,
+    required String workId,
+    required bool appIsOpen,
+  }) async {
+    try {
+      // Vibración para mensaje de chat
+      await _vibrate(pattern: [50, 100, 50]);
+
+      const AndroidNotificationDetails androidPlatformChannelSpecifics =
+          AndroidNotificationDetails(
+        'chat_channel',
+        'Mensajes',
+        channelDescription: 'Notificaciones de chat',
+        importance: Importance.high,
+        priority: Priority.high,
+        enableVibration: true,
+      );
+
+      const DarwinNotificationDetails iosPlatformChannelSpecifics =
+          DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      const NotificationDetails platformChannelSpecifics =
+          NotificationDetails(
+        android: androidPlatformChannelSpecifics,
+        iOS: iosPlatformChannelSpecifics,
+      );
+
+      await _flutterLocalNotificationsPlugin.show(
+        workId.hashCode, // ID único por trabajo
+        '💬 Mensaje de $senderName',
+        messagePreview,
+        platformChannelSpecifics,
+        payload: 'chat_$workId',
+      );
+
+      print('✅ Notificación de chat mostrada');
+    } catch (e) {
+      print('❌ Error mostrando notificación de chat: $e');
+    }
+  }
+
+  /// 🎯 Notificación para inicialización de chat
+  Future<void> showChatInitializedNotification({
+    required String otherUserName,
+    required String workId,
+  }) async {
+    try {
+      // Vibración para chat inicializado
+      await _vibrate(pattern: [100, 50, 100, 50, 100]);
+
+      const AndroidNotificationDetails androidPlatformChannelSpecifics =
+          AndroidNotificationDetails(
+        'chat_init_channel',
+        'Chat Inicializado',
+        channelDescription: 'Notificaciones de inicio de chat',
+        importance: Importance.high,
+        priority: Priority.high,
+        enableVibration: true,
+      );
+
+      const DarwinNotificationDetails iosPlatformChannelSpecifics =
+          DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      const NotificationDetails platformChannelSpecifics =
+          NotificationDetails(
+        android: androidPlatformChannelSpecifics,
+        iOS: iosPlatformChannelSpecifics,
+      );
+
+      await _flutterLocalNotificationsPlugin.show(
+        999,
+        '🎯 Chat Inicializado',
+        'Ahora puedes comunicarte con $otherUserName',
+        platformChannelSpecifics,
+        payload: 'chat_init_$workId',
+      );
+
+      print('✅ Notificación de chat inicializado mostrada');
+    } catch (e) {
+      print('❌ Error mostrando notificación: $e');
     }
   }
 }

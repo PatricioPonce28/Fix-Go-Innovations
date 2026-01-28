@@ -139,7 +139,8 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
               TextButton(
                 onPressed: () {
                   Navigator.pop(context); // Cerrar diálogo
-                  widget.onQuotationSent();
+                  Navigator.pop(context); // Cerrar pantalla de cotización
+                  widget.onQuotationSent(); // Callback para refrescar
                 },
                 child: const Text('Entendido'),
               ),

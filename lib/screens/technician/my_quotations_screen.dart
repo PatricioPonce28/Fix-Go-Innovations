@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/user_model.dart';
 import '../../models/quotation_model.dart';
-import '../../models/service_request_model.dart'; // Agregar
-import '../../models/work_and_chat_models.dart'; // Agregar
+import '../../models/service_request_model.dart';
+import '../../models/work_and_chat_models.dart';
 import '../../services/quotation_service.dart';
-import '../../services/work_and_chat_service.dart'; // Agregar
+import '../../services/work_and_chat_service.dart';
+import '../../services/notification_system_service.dart';
 import 'quotation_detail_screen.dart';
-import '../client/work_coordination_screen.dart';// Agregar
+import '../client/work_coordination_screen.dart';
 
 class MyQuotationsScreen extends StatefulWidget {
   final UserModel user;
@@ -21,18 +23,200 @@ class MyQuotationsScreen extends StatefulWidget {
 class _MyQuotationsScreenState extends State<MyQuotationsScreen> {
   final _quotationService = QuotationService();
   final _workService = WorkService(); // Agregar
+  final _notificationService = NotificationSystemService(); // Agregar
+  final _supabase = Supabase.instance.client; // Agregar
+  
   List<Quotation> _quotations = [];
   bool _isLoading = true;
   String _filterStatus = 'all';
-  final Map<String, AcceptedWork?> _quotationWorks = {}; // 🔴 NUEVO
+  final Map<String, AcceptedWork?> _quotationWorks = {};
+  RealtimeChannel? _quotationsSubscription;
 
   @override
   void initState() {
     super.initState();
     _loadQuotations();
+    _setupRealtimeSubscription(); // Agregar
+  }
+
+  @override
+  void dispose() {
+    _quotationsSubscription?.unsubscribe(); // Limpiar subscription
+    super.dispose();
+  }
+
+  /// 🔴 NUEVO: Escuchar cambios en cotizaciones en tiempo real
+  void _setupRealtimeSubscription() {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    _quotationsSubscription = _supabase.realtime.channel(
+      'public:quotations:technician_id=eq.$userId',
+    ).onPostgresChanges(
+      event: PostgresChangeEvent.all,
+      schema: 'public',
+      table: 'quotations',
+      filter: PostgresChangeFilter(
+        type: PostgresChangeFilterType.eq,
+        column: 'technician_id',
+        value: userId,
+      ),
+      callback: (payload) {
+        if (!mounted) return;
+        final newData = payload.newRecord;
+        
+        // Si una cotización fue aceptada
+        if (newData['status'] == 'accepted') {
+          final quotationId = newData['id'];
+          final clientName = newData['client_name'] ?? 'Cliente';
+          final amount = newData['total_amount'] ?? 0.0;
+          
+          // Mostrar notificación local
+          _notificationService.showQuotationAcceptedNotification(
+            clientName: clientName,
+            amount: amount.toDouble(),
+            quotationId: quotationId,
+          );
+          
+          // Mostrar diálogo visual en la app si está abierta
+          _showAcceptanceDialog(quotationId, clientName, amount.toDouble());
+          
+          // Recargar cotizaciones
+          _loadQuotations();
+        }
+      },
+    ).subscribe();
+  }
+
+  /// 🔴 NUEVO: Mostrar diálogo cuando se acepta una cotización
+  void _showAcceptanceDialog(String quotationId, String clientName, double amount) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('🎉 ¡Cotización Aceptada!'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.green[100],
+              ),
+              child: Icon(
+                Icons.check_circle,
+                color: Colors.green[700],
+                size: 50,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '$clientName aceptó tu cotización',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Monto: \$${amount.toStringAsFixed(2)}',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.green[700],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Por favor, procede a confirmar los detalles del trabajo en el chat.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Más Tarde'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _goToWorkConfirmation(quotationId);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Ir a Confirmar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 🔴 NUEVO: Navegar a la pantalla de confirmación del trabajo
+  Future<void> _goToWorkConfirmation(String quotationId) async {
+    try {
+      // Obtener el trabajo asociado
+      final work = await _workService.getWorkByQuotation(quotationId);
+      
+      if (!mounted) return;
+      
+      if (work != null) {
+        // Crear solicitud básica para la navegación
+        final request = ServiceRequest(
+          id: work.requestId,
+          clientId: work.clientId,
+          title: 'Trabajo Aceptado',
+          description: 'Coordinación de trabajo',
+          serviceType: ServiceType.values.first,
+          sector: '',
+          exactLocation: '',
+          status: RequestStatus.assigned,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+          imageUrls: [],
+        );
+        
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => WorkCoordinationScreen(
+              work: work,
+              request: request,
+              currentUser: widget.user,
+              isClient: false, // Es técnico
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Aún no hay trabajo. Intenta más tarde.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Future<void> _loadQuotations() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     final quotations = await _quotationService.getTechnicianQuotations();
     
@@ -40,10 +224,12 @@ class _MyQuotationsScreenState extends State<MyQuotationsScreen> {
     for (var quotation in quotations) {
       if (quotation.status == QuotationStatus.accepted) {
         final work = await _workService.getWorkByQuotation(quotation.id);
+        if (!mounted) return;
         _quotationWorks[quotation.id] = work;
       }
     }
     
+    if (!mounted) return;
     setState(() {
       _quotations = quotations;
       _isLoading = false;
@@ -67,7 +253,7 @@ class _MyQuotationsScreenState extends State<MyQuotationsScreen> {
         clientId: '',
         title: 'Trabajo Aceptado',
         description: 'Coordinación de trabajo',
-        serviceType: ServiceType.values.first, // Reemplaza por el valor adecuado de tu enum
+        serviceType: ServiceType.values.first,
         sector: '',
         exactLocation: '',
         status: RequestStatus.assigned,

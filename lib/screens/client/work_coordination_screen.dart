@@ -54,6 +54,7 @@ class _WorkCoordinationScreenState extends State<WorkCoordinationScreen>
   }
 
   Future<void> _loadWorkDetails() async {
+    if (!mounted) return;
     final work = await _workService.getWorkByQuotation(widget.work.quotationId);
     if (work != null && mounted) {
       setState(() {

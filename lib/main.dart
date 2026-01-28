@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'core/supabase_client.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/auth/forgot_password_screen.dart';
+import 'screens/auth/reset_password_screen.dart';
+import 'screens/help/help_support_screen.dart';
+import 'screens/profile/change_password_screen.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 void main() async {
@@ -85,6 +89,16 @@ class MyApp extends StatelessWidget {
         ),
       ),
       home: const LoginScreen(),
+      routes: {
+        '/login': (context) => const LoginScreen(),
+        '/forgot_password': (context) => const ForgotPasswordScreen(),
+        '/reset_password': (context) {
+          final email = ModalRoute.of(context)?.settings.arguments as String? ?? '';
+          return ResetPasswordScreen(email: email);
+        },
+        '/change_password': (context) => const ChangePasswordScreen(),
+        '/help_support': (context) => const HelpSupportScreen(),
+      },
     );
   }
 }

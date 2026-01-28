@@ -6,6 +6,7 @@ import '../../models/user_model.dart'; // Agregar
 import '../../models/work_and_chat_models.dart'; // Agregar
 import '../../services/quotation_service.dart';
 import '../../services/work_and_chat_service.dart'; // Agregar
+import '../chat/chat_confirmation_screen.dart';
 import 'work_coordination_screen.dart'; // Agregar
 
 class QuotationDetailForClientScreen extends StatefulWidget {
@@ -32,6 +33,16 @@ class _QuotationDetailForClientScreenState
   final _quotationService = QuotationService();
   final _workService = WorkService(); // Agregar
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
 
   bool get _isExpired => widget.quotation.isExpired;
   bool get _canDecide =>
@@ -76,14 +87,13 @@ class _QuotationDetailForClientScreenState
       widget.quotation.id,
     );
 
-    setState(() => _isLoading = false);
-
     if (!mounted) return;
 
     if (result['success']) {
       // 🔴 NUEVO: Navegar directamente al chat/pago
       await _navigateToWorkCoordination(result['work']);
     } else {
+      setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: ${result['error']}'),
@@ -107,7 +117,7 @@ class _QuotationDetailForClientScreenState
             children: [
               const CircularProgressIndicator(),
               const SizedBox(height: 16),
-              const Text('Redirigiendo al chat y pago...'),
+              const Text('Preparando confirmación...'),
               const SizedBox(height: 8),
               Text(
                 'Total: \$${workData['payment_amount']?.toStringAsFixed(2) ?? '0.00'}',
@@ -127,15 +137,22 @@ class _QuotationDetailForClientScreenState
 
       Navigator.of(context).pop(); // Cerrar diálogo de carga
 
-      // Navegar a la pantalla de coordinación
+      // Obtener datos del técnico
+      final work = AcceptedWork.fromJson(workData);
+      final technicianName = await _getTechnicianName(work.technicianId);
+      final request = widget.request;
+
+      // Navegar a pantalla de confirmación bilateral
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
-          builder: (context) => WorkCoordinationScreen(
-            work: AcceptedWork.fromJson(workData),
-            request: widget.request,
-            currentUser: widget.user,
+          builder: (context) => ChatConfirmationScreen(
+            workId: work.id,
+            technicianName: technicianName,
+            clientName: widget.user.fullName,
             isClient: true,
+            sector: request.sector,
+            exactLocation: request.exactLocation,
           ),
         ),
         (route) => false, // Limpiar todo el stack
@@ -151,6 +168,15 @@ class _QuotationDetailForClientScreenState
         );
         Navigator.pop(context); // Volver atrás
       }
+    }
+  }
+
+  Future<String> _getTechnicianName(String technicianId) async {
+    try {
+      final response = await _workService.getTechnicianData(technicianId);
+      return response['full_name'] ?? 'Técnico';
+    } catch (e) {
+      return 'Técnico';
     }
   }
 
@@ -214,10 +240,12 @@ class _QuotationDetailForClientScreenState
 
   // 🔴 NUEVO: Botón para ver chat/pago si ya está aceptada
   void _goToChatAndPayment() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     final work = await _workService.getWorkByQuotation(widget.quotation.id);
 
+    if (!mounted) return;
     setState(() => _isLoading = false);
 
     if (!mounted) return;

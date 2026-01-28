@@ -34,9 +34,11 @@ class _QuotationsForRequestScreenState
   }
 
   Future<void> _loadQuotations() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     final quotations =
         await _quotationService.getQuotationsForRequest(widget.request.id);
+    if (!mounted) return;
     setState(() {
       _quotations = quotations;
       _isLoading = false;

@@ -401,6 +401,56 @@ class WorkService {
       return {};
     }
   }
+
+  // ==================== STREAM DE CONFIRMACIONES DE CHAT ====================
+  Stream<Map<String, bool>> streamWorkConfirmations(String workId) {
+    return _supabase
+        .from('accepted_works')
+        .stream(primaryKey: ['id'])
+        .eq('id', workId)
+        .map((data) {
+          if (data.isEmpty) return {'client_confirmed': false, 'technician_confirmed': false};
+          final work = data.first;
+          return {
+            'client_confirmed': work['client_confirmed_chat'] ?? false,
+            'technician_confirmed': work['technician_confirmed_chat'] ?? false,
+          };
+        });
+  }
+
+  // ==================== CONFIRMAR CHAT LISTO ====================
+  Future<bool> confirmChatReady(String workId, {required bool isClient}) async {
+    try {
+      final fieldName = isClient ? 'client_confirmed_chat' : 'technician_confirmed_chat';
+
+      await _supabase
+          .from('accepted_works')
+          .update({fieldName: true})
+          .eq('id', workId);
+
+      print('✅ [CHAT] ${isClient ? 'Cliente' : 'Técnico'} confirmó chat');
+      return true;
+    } catch (e) {
+      print('❌ Error al confirmar chat: $e');
+      return false;
+    }
+  }
+
+  // ==================== OBTENER DATOS DEL TÉCNICO ====================
+  Future<Map<String, dynamic>> getTechnicianData(String technicianId) async {
+    try {
+      final response = await _supabase
+          .from('profiles')
+          .select('full_name, email, phone')
+          .eq('id', technicianId)
+          .single();
+
+      return response;
+    } catch (e) {
+      print('❌ Error al obtener datos del técnico: $e');
+      return {'full_name': 'Técnico'};
+    }
+  }
 }
 
 // ==================== SERVICIO DE CHAT ====================

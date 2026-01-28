@@ -58,6 +58,7 @@ class _WorkProgressTabState extends State<WorkProgressTab> {
 
     if (confirm != true) return;
 
+    if (!mounted) return;
     setState(() => _isUpdating = true);
 
     final success = await _workService.updateWorkStatus(
@@ -65,6 +66,7 @@ class _WorkProgressTabState extends State<WorkProgressTab> {
       newStatus,
     );
 
+    if (!mounted) return;
     setState(() => _isUpdating = false);
 
     if (!mounted) return;
@@ -101,7 +103,7 @@ class _WorkProgressTabState extends State<WorkProgressTab> {
   }
 
   Future<void> _submitRating() async {
-    if (_rating < 1) return;
+    if (_rating < 1 || !mounted) return;
 
     setState(() => _isRating = true);
 
@@ -113,6 +115,7 @@ class _WorkProgressTabState extends State<WorkProgressTab> {
           : null,
     );
 
+    if (!mounted) return;
     setState(() => _isRating = false);
 
     if (!mounted) return;

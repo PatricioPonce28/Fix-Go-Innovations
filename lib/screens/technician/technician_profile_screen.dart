@@ -314,9 +314,7 @@ const SizedBox(height: 24),
             title: const Text('Cambiar Contraseña'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Funcionalidad próximamente')),
-              );
+              Navigator.pushNamed(context, '/change_password');
             },
           ),
           const Divider(),
@@ -325,9 +323,7 @@ const SizedBox(height: 24),
             title: const Text('Ayuda y Soporte'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Funcionalidad próximamente')),
-              );
+              Navigator.pushNamed(context, '/help_support');
             },
           ),
           const Divider(),

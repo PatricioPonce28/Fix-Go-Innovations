@@ -25,6 +25,11 @@ class AcceptedWork {
   final DateTime updatedAt;
   final Map<String, dynamic>? paymentMetadata;
   final Map<String, dynamic>? braintreeDeviceData;
+  
+  // 🎯 Chat confirmation fields
+  final bool? clientConfirmedChat;
+  final bool? technicianConfirmedChat;
+  final bool? chatInitialized;
 
   AcceptedWork({
     required this.id,
@@ -52,6 +57,9 @@ class AcceptedWork {
     required this.updatedAt,
     this.paymentMetadata,
     this.braintreeDeviceData,
+    this.clientConfirmedChat,
+    this.technicianConfirmedChat,
+    this.chatInitialized,
   });
 
   /// Convertir de JSON (Supabase)
@@ -82,6 +90,9 @@ class AcceptedWork {
       updatedAt: DateTime.parse(json['updated_at'] as String),
       paymentMetadata: json['payment_metadata'] as Map<String, dynamic>?,
       braintreeDeviceData: json['braintree_device_data'] as Map<String, dynamic>?,
+      clientConfirmedChat: json['client_confirmed_chat'] as bool? ?? false,
+      technicianConfirmedChat: json['technician_confirmed_chat'] as bool? ?? false,
+      chatInitialized: json['chat_initialized'] as bool? ?? false,
     );
   }
 
@@ -112,6 +123,9 @@ class AcceptedWork {
     'updated_at': updatedAt.toIso8601String(),
     'payment_metadata': paymentMetadata,
     'braintree_device_data': braintreeDeviceData,
+    'client_confirmed_chat': clientConfirmedChat ?? false,
+    'technician_confirmed_chat': technicianConfirmedChat ?? false,
+    'chat_initialized': chatInitialized ?? false,
   };
 
   /// copyWith para crear copias con cambios
@@ -168,6 +182,9 @@ class AcceptedWork {
       updatedAt: updatedAt ?? this.updatedAt,
       paymentMetadata: paymentMetadata ?? this.paymentMetadata,
       braintreeDeviceData: braintreeDeviceData ?? this.braintreeDeviceData,
+      clientConfirmedChat: clientConfirmedChat ?? this.clientConfirmedChat,
+      technicianConfirmedChat: technicianConfirmedChat ?? this.technicianConfirmedChat,
+      chatInitialized: chatInitialized ?? this.chatInitialized,
     );
   }
 

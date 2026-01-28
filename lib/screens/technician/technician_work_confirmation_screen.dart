@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../../models/quotation_model.dart';
 import '../../models/service_request_model.dart';
 import '../../models/accepted_work_model.dart';
 import '../../services/quotation_service.dart';
 import '../../services/service_request_service.dart';
-import '../chat/chat_initialization_screen.dart';
+import '../../services/work_and_chat_service.dart';
+import '../chat/chat_confirmation_screen.dart';
 
 class TechnicianWorkConfirmationScreen extends StatefulWidget {
   final String quotationId;
@@ -27,6 +27,7 @@ class _TechnicianWorkConfirmationScreenState
     extends State<TechnicianWorkConfirmationScreen> {
   late QuotationService _quotationService;
   late ServiceRequestService _serviceRequestService;
+  late WorkService _workService;
 
   Quotation? _quotation;
   ServiceRequest? _serviceRequest;
@@ -39,6 +40,7 @@ class _TechnicianWorkConfirmationScreenState
     super.initState();
     _quotationService = QuotationService();
     _serviceRequestService = ServiceRequestService();
+    _workService = WorkService();
     _loadData();
   }
 
@@ -75,37 +77,42 @@ class _TechnicianWorkConfirmationScreenState
     try {
       if (!mounted) return;
 
-      // Enviar notificación al técnico
-      final flutterLocalNotificationsPlugin =
-          FlutterLocalNotificationsPlugin();
-      await flutterLocalNotificationsPlugin.show(
-        0,
-        '✅ Cotización Aceptada',
-        'El cliente aceptó tu cotización. Ahora confirma la ubicación en el chat.',
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'fix_go_notifications',
-            'Fix&Go Notifications',
-            channelDescription:
-                'Notificaciones de Fix&Go Innovations',
-            importance: Importance.max,
-            priority: Priority.high,
+      // Mostrar loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('✅ ¡Confirmando!'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              const Text('Preparando confirmación...'),
+            ],
           ),
-          iOS: DarwinNotificationDetails(),
         ),
       );
 
-      // Ir a pantalla de inicialización del chat
+      await Future.delayed(const Duration(seconds: 1));
+
       if (!mounted) return;
+      Navigator.of(context).pop(); // Cerrar diálogo
+
+      // Obtener datos del cliente
+      final clientName = await _getClientName(widget.work.clientId);
+
+      // Navegar a pantalla de confirmación bilateral
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (context) =>
-              ChatInitializationScreen(
+          builder: (context) => ChatConfirmationScreen(
             workId: widget.work.id,
+            technicianName: 'Tú',
+            clientName: clientName,
+            isClient: false,
             sector: _serviceRequest?.sector ?? 'No especificado',
             exactLocation:
-                _serviceRequest?.exactLocation ??
-                    'Por confirmar',
+                _serviceRequest?.exactLocation ?? 'Por confirmar',
           ),
         ),
       );
@@ -114,6 +121,15 @@ class _TechnicianWorkConfirmationScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
+    }
+  }
+
+  Future<String> _getClientName(String clientId) async {
+    try {
+      final response = await _workService.getTechnicianData(clientId);
+      return response['full_name'] ?? 'Cliente';
+    } catch (e) {
+      return 'Cliente';
     }
   }
 

@@ -3,6 +3,7 @@ import '../../services/auth_service.dart';
 import '../../models/user_model.dart';
 import 'register_selection_screen.dart';
 import 'forgot_password_screen.dart';
+import 'email_verification_screen.dart';
 import '../client/client_home_screen.dart';
 import '../technician/technician_home_screen.dart';
 import '../admin/admin_home_screen.dart';
@@ -44,6 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
 
     if (result['success']) {
+      // ✅ LOGIN EXITOSO Y EMAIL VERIFICADO
       final user = result['user'] as UserModel;
       
       // Navegar según el rol
@@ -61,11 +63,36 @@ class _LoginScreenState extends State<LoginScreen> {
         context,
         MaterialPageRoute(builder: (_) => homeScreen),
       );
+    } else if (result['requiresVerification'] == true) {
+      // ⚠️ EMAIL NO VERIFICADO - REDIRIGE A VERIFICACIÓN
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor verifica tu email para continuar'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ),
+      );
+
+      // Redirige a EmailVerificationScreen
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => EmailVerificationScreen(
+              email: result['email'] ?? _emailController.text,
+              userType: 'unknown',
+              userName: 'Usuario',
+            ),
+          ),
+        );
+      }
     } else {
+      // ❌ ERROR EN LOGIN
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result['message']),
+          content: Text(result['message'] ?? 'Error al iniciar sesión'),
           backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
         ),
       );
     }

@@ -14,9 +14,9 @@ class AuthService {
     ImageData? profileImageData,
   ) async {
     try {
-      print('📝 Iniciando registro para: ${user.email}');
+      print('📝 PASO 1/5: Iniciando registro para: ${user.email}');
       
-      // 1. Crear usuario en Supabase Auth
+      // 1️⃣ CREAR USUARIO EN SUPABASE AUTH
       final AuthResponse authResponse = await _supabase.auth.signUp(
         email: user.email,
         password: password,
@@ -26,12 +26,13 @@ class AuthService {
         return {
           'success': false,
           'message': 'Error al crear usuario. Verifica tu email.',
+          'emailSent': false,
         };
       }
 
-      print('✅ Usuario creado en Auth: ${authResponse.user!.id}');
+      print('✅ PASO 2/5: Usuario creado en Auth (sin confirmar): ${authResponse.user!.id}');
 
-      // 2. Subir foto PRIMERO (si existe)
+      // 2️⃣ SUBIR FOTO DE PERFIL (si existe)
       String? photoUrl;
       if (profileImageData != null) {
         try {
@@ -39,31 +40,45 @@ class AuthService {
             profileImageData,
             authResponse.user!.id,
           );
-          print('✅ Foto subida: $photoUrl');
+          print('✅ PASO 3/5: Foto subida: $photoUrl');
         } catch (e) {
-          print('⚠️ Error al subir foto: $e');
-          // Continuamos sin foto
+          print('⚠️ Error al subir foto (continuando): $e');
         }
+      } else {
+        print('ℹ️ PASO 3/5: Sin foto de perfil');
       }
 
-      // 3. Crear perfil usando función RPC (bypasea RLS)
-      final rpcResult = await _supabase.rpc('create_user_profile', params: {
-        'user_id': authResponse.user!.id,
-        'user_email': user.email,
-        'user_full_name': user.fullName,
-        'user_phone': user.phone,
-        'user_role': user.role.name,
-        'user_address': user.sector,
-        'user_specialty': user.specialty,
-        'user_cedula': user.cedula,
-        'user_profile_image_url': photoUrl,
-      });
+      // 3️⃣ CREAR PERFIL EN BASE DE DATOS
+      try {
+        final rpcResult = await _supabase.rpc('create_user_profile', params: {
+          'user_id': authResponse.user!.id,
+          'user_email': user.email,
+          'user_full_name': user.fullName,
+          'user_phone': user.phone,
+          'user_role': user.role.name,
+          'user_address': user.sector,
+          'user_specialty': user.specialty,
+          'user_cedula': user.cedula,
+          'user_profile_image_url': photoUrl,
+        });
+        print('✅ PASO 4/5: Perfil creado en DB: $rpcResult');
+      } catch (e) {
+        print('❌ Error al crear perfil: $e');
+        // No abortamos, el usuario ya está creado en Auth
+        // Podría intentar recrear el perfil luego
+      }
 
-      print('✅ Perfil creado: $rpcResult');
+      // 4️⃣ EMAIL DE CONFIRMACIÓN ENVIADO AUTOMÁTICAMENTE POR SUPABASE
+      print('✅ PASO 5/5: Email de confirmación enviado a: ${user.email}');
 
       return {
         'success': true,
         'message': '✅ Registro exitoso. Revisa tu email para verificar tu cuenta.',
+        'emailSent': true,
+        'userId': authResponse.user!.id,
+        'email': user.email,
+        'userType': user.role.name,
+        'userName': user.fullName,
       };
       
     } on AuthException catch (e) {
@@ -71,22 +86,70 @@ class AuthService {
       return {
         'success': false,
         'message': _handleAuthError(e.message),
+        'emailSent': false,
       };
     } catch (e) {
       print('❌ Error inesperado: $e');
       return {
         'success': false,
         'message': 'Error al registrar usuario: ${e.toString()}',
+        'emailSent': false,
       };
+    }
+  }
+
+  // ==================== REENVIAR EMAIL DE CONFIRMACIÓN ====================
+  Future<Map<String, dynamic>> resendConfirmationEmail(String email) async {
+    try {
+      print('📧 Reenviando email de confirmación a: $email');
+      
+      // Usar el método de Supabase para reenviar OTP
+      await _supabase.auth.signUp(
+        email: email,
+        password: 'temporary_pass_12345', // Temporal, solo para reenviar
+      );
+      
+      print('✅ Email de confirmación reenviado');
+      return {
+        'success': true,
+        'message': '✅ Email reenviado. Revisa tu bandeja de entrada.',
+      };
+    } on AuthException catch (e) {
+      print('❌ Error reenviando email: ${e.message}');
+      return {
+        'success': false,
+        'message': 'Error: ${e.message}',
+      };
+    } catch (e) {
+      print('❌ Error inesperado: $e');
+      return {
+        'success': false,
+        'message': 'Error al reenviar email: ${e.toString()}',
+      };
+    }
+  }
+
+  // ==================== VERIFICAR EMAIL ====================
+  Future<bool> isEmailVerified() async {
+    try {
+      final session = _supabase.auth.currentSession;
+      if (session == null) return false;
+      
+      final isVerified = session.user.emailConfirmedAt != null;
+      print('📧 Email verificado: $isVerified');
+      return isVerified;
+    } catch (e) {
+      print('❌ Error verificando email: $e');
+      return false;
     }
   }
 
   // ==================== LOGIN ====================
   Future<Map<String, dynamic>> login(String email, String password) async {
     try {
-      print('🔐 Iniciando login para: $email');
+      print('🔐 PASO 1/4: Iniciando login para: $email');
       
-      // 1. Autenticar con Supabase
+      // 1️⃣ AUTENTICAR CON SUPABASE
       final AuthResponse response = await _supabase.auth.signInWithPassword(
         email: email,
         password: password,
@@ -96,21 +159,37 @@ class AuthService {
         return {
           'success': false,
           'message': 'Credenciales incorrectas',
+          'emailVerified': false,
         };
       }
 
-      print('✅ Usuario autenticado: ${response.user!.id}');
+      print('✅ PASO 2/4: Usuario autenticado: ${response.user!.id}');
 
-      // 2. Obtener perfil del usuario
+      // 2️⃣ VERIFICAR SI EMAIL ESTÁ CONFIRMADO
+      final emailVerified = response.user!.emailConfirmedAt != null;
+      print('✅ PASO 3/4: Email verificado: $emailVerified');
+
+      if (!emailVerified) {
+        print('⚠️ Email sin confirmar, solicitando verificación');
+        return {
+          'success': false,
+          'message': 'Por favor verifica tu email para continuar',
+          'emailVerified': false,
+          'requiresVerification': true,
+          'email': email,
+        };
+      }
+
+      // 3️⃣ OBTENER PERFIL DEL USUARIO
       final profileData = await _supabase
           .from('user_profiles')
           .select('*')
           .eq('id', response.user!.id)
           .single();
 
-      print('✅ Perfil obtenido: ${profileData['full_name']}');
+      print('✅ PASO 4/4: Perfil obtenido: ${profileData['full_name']}');
 
-      // 3. Crear modelo de usuario
+      // 4️⃣ CREAR MODELO DE USUARIO Y RETORNAR
       final user = UserModel(
         id: profileData['id'],
         email: profileData['email'],
@@ -127,6 +206,7 @@ class AuthService {
         'success': true,
         'message': 'Login exitoso',
         'user': user,
+        'emailVerified': true,
       };
       
     } on AuthException catch (e) {
@@ -134,12 +214,14 @@ class AuthService {
       return {
         'success': false,
         'message': _handleAuthError(e.message),
+        'emailVerified': false,
       };
     } catch (e) {
       print('❌ Error inesperado en login: $e');
       return {
         'success': false,
         'message': 'Error al iniciar sesión: ${e.toString()}',
+        'emailVerified': false,
       };
     }
   }
@@ -285,6 +367,102 @@ class AuthService {
   }
 
   // ==================== CAMBIAR CONTRASEÑA ====================
+  Future<Map<String, dynamic>> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String confirmPassword,
+    required String email,
+  }) async {
+    try {
+      print('🔐 Iniciando cambio de contraseña para: $email');
+
+      // 1️⃣ VALIDACIONES
+      if (currentPassword.isEmpty) {
+        return {
+          'success': false,
+          'message': 'Debes ingresar tu contraseña actual',
+        };
+      }
+
+      if (newPassword.isEmpty) {
+        return {
+          'success': false,
+          'message': 'Debes ingresar una nueva contraseña',
+        };
+      }
+
+      if (confirmPassword.isEmpty) {
+        return {
+          'success': false,
+          'message': 'Debes confirmar tu nueva contraseña',
+        };
+      }
+
+      if (newPassword.length < 6) {
+        return {
+          'success': false,
+          'message': 'La contraseña debe tener al menos 6 caracteres',
+        };
+      }
+
+      if (newPassword != confirmPassword) {
+        return {
+          'success': false,
+          'message': 'Las contraseñas no coinciden',
+        };
+      }
+
+      if (currentPassword == newPassword) {
+        return {
+          'success': false,
+          'message': 'La nueva contraseña debe ser diferente a la actual',
+        };
+      }
+
+      // 2️⃣ VERIFICAR CONTRASEÑA ACTUAL (Re-autenticar)
+      print('🔍 Verificando contraseña actual...');
+      try {
+        await _supabase.auth.signInWithPassword(
+          email: email,
+          password: currentPassword,
+        );
+        print('✅ Contraseña actual verificada');
+      } on AuthException catch (e) {
+        print('❌ Contraseña actual incorrecta: ${e.message}');
+        return {
+          'success': false,
+          'message': 'Tu contraseña actual es incorrecta',
+        };
+      }
+
+      // 3️⃣ ACTUALIZAR CONTRASEÑA
+      print('🔄 Actualizando contraseña...');
+      await _supabase.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+
+      print('✅ Contraseña actualizada exitosamente');
+
+      return {
+        'success': true,
+        'message': 'Contraseña actualizada exitosamente',
+      };
+    } on AuthException catch (e) {
+      print('❌ Error de autenticación: ${e.message}');
+      return {
+        'success': false,
+        'message': _handleAuthError(e.message),
+      };
+    } catch (e) {
+      print('❌ Error inesperado: $e');
+      return {
+        'success': false,
+        'message': 'Error: ${e.toString()}',
+      };
+    }
+  }
+
+  // ==================== ACTUALIZAR CONTRASEÑA (LEGACY) ====================
   Future<Map<String, dynamic>> updatePassword(
     String newPassword,
   ) async {

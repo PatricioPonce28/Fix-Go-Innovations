@@ -3,6 +3,7 @@ import '../../models/user_model.dart';
 import '../../models/image_data.dart';
 import '../../services/auth_service.dart';
 import '../../services/storage_service.dart';
+import '../../core/validation_utils.dart';
 import 'registration_confirmation_screen.dart';
 
 class RegisterTechnicianScreen extends StatefulWidget {
@@ -244,16 +245,9 @@ class _RegisterTechnicianScreenState extends State<RegisterTechnicianScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Email',
                     prefixIcon: Icon(Icons.email_outlined),
+                    hintText: 'usuario@ejemplo.com',
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Ingresa tu email';
-                    }
-                    if (!value.contains('@')) {
-                      return 'Email inválido';
-                    }
-                    return null;
-                  },
+                  validator: ValidationUtils.validateEmail,
                 ),
                 const SizedBox(height: 16),
 

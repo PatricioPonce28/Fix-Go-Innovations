@@ -31,15 +31,31 @@ class QuotationService {
         return {'success': false, 'message': 'Usuario no autenticado'};
       }
 
-      // Generar número de cotización
-      final quotationNumberResult =
-          await _supabase.rpc('generate_quotation_number');
-      final quotationNumber = quotationNumberResult as String;
+      // Verificar si ya existe cotización para esta solicitud del mismo técnico
+      final existingQuotation = await _supabase
+          .from('quotations')
+          .select('id, quotation_number')
+          .eq('request_id', requestId)
+          .eq('technician_id', userId)
+          .maybeSingle();
+
+      // Si existe, actualizar; si no, crear
+      String quotationNumber;
+      if (existingQuotation != null) {
+        print('📝 Actualizando cotización existente: ${existingQuotation['quotation_number']}');
+        quotationNumber = existingQuotation['quotation_number'];
+      } else {
+        // Generar número de cotización solo si es nueva
+        final quotationNumberResult =
+            await _supabase.rpc('generate_quotation_number');
+        quotationNumber = quotationNumberResult as String;
+        print('✨ Creando nueva cotización: $quotationNumber');
+      }
 
       // Calcular fecha de expiración
       final expiresAt = DateTime.now().add(Duration(days: validityDays));
 
-      // Crear cotización
+      // Datos de la cotización
       final quotationData = {
         'request_id': requestId,
         'technician_id': userId,
@@ -64,13 +80,25 @@ class QuotationService {
         'status': 'pending',
       };
 
-      await _supabase.from('quotations').insert(quotationData);
-
-      print('✅ Cotización creada: $quotationNumber');
+      if (existingQuotation != null) {
+        // Actualizar cotización existente
+        await _supabase
+            .from('quotations')
+            .update(quotationData)
+            .eq('id', existingQuotation['id']);
+        
+        print('✅ Cotización actualizada: $quotationNumber');
+      } else {
+        // Insertar nueva cotización
+        await _supabase.from('quotations').insert(quotationData);
+        print('✅ Cotización creada: $quotationNumber');
+      }
 
       return {
         'success': true,
-        'message': '✅ Cotización enviada exitosamente',
+        'message': existingQuotation != null
+            ? '✅ Cotización actualizada exitosamente'
+            : '✅ Cotización enviada exitosamente',
         'quotation_number': quotationNumber,
       };
     } catch (e) {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/notification_system_service.dart'; // Agregar
 import '../client/chat_tab.dart';
 
 /// Pantalla de espera mientras se inicializa el chat
@@ -22,6 +23,7 @@ class ChatInitializationScreen extends StatefulWidget {
 class _ChatInitializationScreenState extends State<ChatInitializationScreen>
     with TickerProviderStateMixin {
   late AnimationController _animationController;
+  final _notificationService = NotificationSystemService(); // Agregar
   String _status = 'Inicializando chat...';
 
   @override
@@ -53,6 +55,13 @@ class _ChatInitializationScreenState extends State<ChatInitializationScreen>
       // Esperar a que el chat esté listo
       await Future.delayed(const Duration(seconds: 1));
       setState(() => _status = '✅ ¡Chat listo!');
+      
+      // Mostrar notificación
+      _notificationService.showChatInitializedNotification(
+        otherUserName: 'Técnico',
+        workId: widget.workId,
+      );
+      
       await Future.delayed(const Duration(milliseconds: 500));
 
       if (!mounted) return;
