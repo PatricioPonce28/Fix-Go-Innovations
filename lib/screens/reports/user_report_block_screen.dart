@@ -41,7 +41,8 @@ class _ReportUserScreenState extends State<ReportUserScreen> {
     if (_selectedReason == null || _descriptionController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Por favor selecciona una razón y describe el problema'),
+          content:
+              Text('Por favor selecciona una razón y describe el problema'),
         ),
       );
       return;
@@ -161,7 +162,8 @@ class _ReportUserScreenState extends State<ReportUserScreen> {
             ...ReportReason.values.map((reason) {
               return Card(
                 child: ListTile(
-                  title: Text(reason.name[0].toUpperCase() + reason.name.substring(1)),
+                  title: Text(
+                      reason.name[0].toUpperCase() + reason.name.substring(1)),
                   subtitle: Text(_getReasonDescription(reason)),
                   leading: Radio<ReportReason>(
                     value: reason,
@@ -357,7 +359,8 @@ class _BlockManagementScreenState extends State<BlockManagementScreen> {
                       if (block.reason != null) Text('Razón: ${block.reason}'),
                       Text(
                         'Bloqueado el ${block.createdAt.day}/${block.createdAt.month}/${block.createdAt.year}',
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        style:
+                            const TextStyle(fontSize: 12, color: Colors.grey),
                       ),
                     ],
                   ),

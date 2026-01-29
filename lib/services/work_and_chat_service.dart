@@ -209,7 +209,8 @@ class WorkService {
         updates['completed_at'] = DateTime.now().toIso8601String();
       }
 
-      if (failureReason != null && newStatus == payment_models.PaymentStatus.failed) {
+      if (failureReason != null &&
+          newStatus == payment_models.PaymentStatus.failed) {
         updates['failure_reason'] = failureReason;
       }
 
@@ -341,10 +342,12 @@ class WorkService {
       // Trabajos que necesitan: pago, seguimiento, o calificación
       final response = await _supabase
           .from('accepted_works')
-          .select('*, service_requests(title)') // Incluir título de la solicitud
+          .select(
+              '*, service_requests(title)') // Incluir título de la solicitud
           .eq('client_id', userId)
-          .inFilter('status', ['pending_payment', 'paid', 'completed'])
-          .order('created_at', ascending: false);
+          .inFilter('status', ['pending_payment', 'paid', 'completed']).order(
+              'created_at',
+              ascending: false);
 
       return response.map((item) {
         final work = AcceptedWork.fromJson(item);
@@ -370,8 +373,9 @@ class WorkService {
           .from('accepted_works')
           .select('*, service_requests(title)')
           .eq('technician_id', userId)
-          .inFilter('status', ['paid', 'on_way', 'in_progress'])
-          .order('created_at', ascending: false);
+          .inFilter('status', ['paid', 'on_way', 'in_progress']).order(
+              'created_at',
+              ascending: false);
 
       return response.map((item) => AcceptedWork.fromJson(item)).toList();
     } catch (e) {
@@ -383,17 +387,13 @@ class WorkService {
   // ==================== OBTENER DATOS COMPLETOS DEL TRABAJO ====================
   Future<Map<String, dynamic>> getWorkDetails(String workId) async {
     try {
-      final response = await _supabase
-          .from('accepted_works')
-          .select('''
+      final response = await _supabase.from('accepted_works').select('''
             *,
             service_requests(*),
             quotations(*),
             client_profile:user_profiles!client_id(full_name, phone),
             technician_profile:user_profiles!technician_id(full_name, phone, specialty)
-          ''')
-          .eq('id', workId)
-          .single();
+          ''').eq('id', workId).single();
 
       return response;
     } catch (e) {
@@ -409,7 +409,8 @@ class WorkService {
         .stream(primaryKey: ['id'])
         .eq('id', workId)
         .map((data) {
-          if (data.isEmpty) return {'client_confirmed': false, 'technician_confirmed': false};
+          if (data.isEmpty)
+            return {'client_confirmed': false, 'technician_confirmed': false};
           final work = data.first;
           return {
             'client_confirmed': work['client_confirmed_chat'] ?? false,
@@ -421,12 +422,12 @@ class WorkService {
   // ==================== CONFIRMAR CHAT LISTO ====================
   Future<bool> confirmChatReady(String workId, {required bool isClient}) async {
     try {
-      final fieldName = isClient ? 'client_confirmed_chat' : 'technician_confirmed_chat';
+      final fieldName =
+          isClient ? 'client_confirmed_chat' : 'technician_confirmed_chat';
 
       await _supabase
           .from('accepted_works')
-          .update({fieldName: true})
-          .eq('id', workId);
+          .update({fieldName: true}).eq('id', workId);
 
       print('✅ [CHAT] ${isClient ? 'Cliente' : 'Técnico'} confirmó chat');
       return true;

@@ -52,7 +52,7 @@ class AuthService {
 
       // 3️⃣ CREAR PERFIL EN BASE DE DATOS
       try {
-        final rpcResult = await _supabase.rpc('create_user_profile', params: {
+        final rpcResult = await _supabase.rpc('create_user_profiles', params: {
           'user_id': authResponse.user!.id,
           'user_email': user.email,
           'user_full_name': user.fullName,

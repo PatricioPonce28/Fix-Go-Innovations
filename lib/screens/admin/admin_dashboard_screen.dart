@@ -553,7 +553,7 @@ class _UsersTabState extends State<_UsersTab> {
                           ),
                         ),
                         title: Text(user.fullName),
-                        subtitle: Text('${user.email}\n${user.phoneNumber ?? 'Sin teléfono'}'),
+                        subtitle: Text(user.email),
                         isThreeLine: true,
                         trailing: Chip(
                           label: Text(
