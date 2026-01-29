@@ -6,7 +6,6 @@ import '../../models/user_model.dart'; // Agregar
 import '../../models/work_and_chat_models.dart'; // Agregar
 import '../../services/quotation_service.dart';
 import '../../services/work_and_chat_service.dart'; // Agregar
-import '../chat/chat_confirmation_screen.dart';
 import 'work_coordination_screen.dart'; // Agregar
 
 class QuotationDetailForClientScreen extends StatefulWidget {
@@ -82,101 +81,82 @@ class _QuotationDetailForClientScreenState
 
     setState(() => _isLoading = true);
 
-    // ✅ USAR NUEVO MÉTODO QUE DEVUELVE EL TRABAJO CREADO
-    final result = await _quotationService.acceptQuotationWithNavigation(
-      widget.quotation.id,
-    );
-
-    if (!mounted) return;
-
-    if (result['success']) {
-      // 🔴 NUEVO: Navegar directamente al chat/pago
-      await _navigateToWorkCoordination(result['work']);
-    } else {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${result['error']}'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  // 🔴 NUEVO: Navegar a coordinación
-  Future<void> _navigateToWorkCoordination(
-      Map<String, dynamic> workData) async {
     try {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          title: const Text('✅ ¡Cotización Aceptada!'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: 16),
-              const Text('Preparando confirmación...'),
-              const SizedBox(height: 8),
-              Text(
-                'Total: \$${workData['payment_amount']?.toStringAsFixed(2) ?? '0.00'}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.green,
-                ),
-              ),
-            ],
-          ),
-        ),
+      // Aceptar la cotización
+      final result = await _quotationService.acceptQuotationWithNavigation(
+        widget.quotation.id,
       );
-
-      await Future.delayed(const Duration(seconds: 1));
 
       if (!mounted) return;
 
-      Navigator.of(context).pop(); // Cerrar diálogo de carga
-
-      // Obtener datos del técnico
-      final work = AcceptedWork.fromJson(workData);
-      final technicianName = await _getTechnicianName(work.technicianId);
-      final request = widget.request;
-
-      // Navegar a pantalla de confirmación bilateral
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ChatConfirmationScreen(
-            workId: work.id,
-            technicianName: technicianName,
-            clientName: widget.user.fullName,
-            isClient: true,
-            sector: request.sector,
-            exactLocation: request.exactLocation,
+      if (result['success']) {
+        // Mostrar diálogo de carga mientras se prepara
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: const Text('✅ ¡Cotización Aceptada!'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                const Text('Preparando coordinación...'),
+                const SizedBox(height: 8),
+                if (result['work'] != null)
+                  Text(
+                    'Total: \$${result['work']['payment_amount']?.toStringAsFixed(2) ?? '0.00'}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+              ],
+            ),
           ),
-        ),
-        (route) => false, // Limpiar todo el stack
-      );
-    } catch (e) {
-      if (mounted) {
-        Navigator.of(context).pop();
+        );
+
+        await Future.delayed(const Duration(seconds: 2));
+
+        if (!mounted) return;
+        Navigator.of(context).pop(); // Cerrar diálogo de carga
+
+        // Convertir a modelo AcceptedWork
+        final work = AcceptedWork.fromJson(result['work']);
+
+        // Navegar directamente a WorkCoordinationScreen con RemoveUntil para limpiar stack
+        if (!mounted) return;
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (context) => WorkCoordinationScreen(
+              work: work,
+              request: widget.request,
+              currentUser: widget.user,
+              isClient: true,
+            ),
+          ),
+          (route) => false, // Limpiar todo el stack
+        );
+      } else {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error al navegar: $e'),
+            content: Text('Error: ${result['error']}'),
             backgroundColor: Colors.red,
           ),
         );
-        Navigator.pop(context); // Volver atrás
       }
-    }
-  }
-
-  Future<String> _getTechnicianName(String technicianId) async {
-    try {
-      final response = await _workService.getTechnicianData(technicianId);
-      return response['full_name'] ?? 'Técnico';
     } catch (e) {
-      return 'Técnico';
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al aceptar: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -628,7 +608,8 @@ class _QuotationDetailForClientScreenState
                                 const Divider(thickness: 2),
                                 _CostRow(
                                   label: 'TOTAL A PAGAR',
-                                  value: widget.quotation.totalAmount + (widget.quotation.totalAmount * 0.10),
+                                  value: widget.quotation.totalAmount +
+                                      (widget.quotation.totalAmount * 0.10),
                                   isTotal: true,
                                 ),
                               ],
@@ -883,7 +864,9 @@ class _CostRow extends StatelessWidget {
             style: TextStyle(
               fontSize: isTotal ? 20 : 16,
               fontWeight: isTotal ? FontWeight.bold : FontWeight.w500,
-              color: isTotal ? Colors.green[700] : (isSubtle ? Colors.grey[600] : null),
+              color: isTotal
+                  ? Colors.green[700]
+                  : (isSubtle ? Colors.grey[600] : null),
             ),
           ),
         ],

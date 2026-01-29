@@ -36,11 +36,11 @@ class _WorkCoordinationScreenState extends State<WorkCoordinationScreen>
   void initState() {
     super.initState();
     _currentWork = widget.work;
-    
+
     // Determinar número de tabs según estado
     final tabCount = _getTabCount();
     _tabController = TabController(length: tabCount, vsync: this);
-    
+
     _loadWorkDetails();
   }
 
@@ -59,7 +59,7 @@ class _WorkCoordinationScreenState extends State<WorkCoordinationScreen>
     if (work != null && mounted) {
       setState(() {
         _currentWork = work;
-        
+
         // Reconstruir tabs si el estado cambió
         final newTabCount = _getTabCount();
         if (newTabCount != _tabController.length) {
@@ -107,22 +107,26 @@ class _WorkCoordinationScreenState extends State<WorkCoordinationScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Coordinación del Trabajo',
-              style: TextStyle(fontSize: 16),
-            ),
-            Text(
-              widget.request.title,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.normal,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+          tooltip: 'Volver',
+        ),
+        title: Text(widget.request.title,
+            maxLines: 1, overflow: TextOverflow.ellipsis),
+        actions: [
+          // Botón para ir al home rápidamente
+          if (widget.isClient)
+            Tooltip(
+              message: 'Ir al inicio',
+              child: IconButton(
+                icon: const Icon(Icons.home),
+                onPressed: () {
+                  Navigator.popUntil(context, (route) => route.isFirst);
+                },
               ),
             ),
-          ],
-        ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(120),
           child: Column(

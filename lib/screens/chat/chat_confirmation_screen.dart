@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:vibration/vibration.dart';
-import '../../models/accepted_work_model.dart';
 import '../../services/work_and_chat_service.dart';
 import '../../services/notification_system_service.dart';
 import '../client/chat_tab.dart';
@@ -162,7 +161,8 @@ class _ChatConfirmationScreenState extends State<ChatConfirmationScreen>
     // Mostrar notificación
     final notificationService = NotificationSystemService();
     await notificationService.showChatInitializedNotification(
-      otherUserName: widget.isClient ? widget.technicianName : widget.clientName,
+      otherUserName:
+          widget.isClient ? widget.technicianName : widget.clientName,
       workId: widget.workId,
     );
 
@@ -172,7 +172,8 @@ class _ChatConfirmationScreenState extends State<ChatConfirmationScreen>
       MaterialPageRoute(
         builder: (context) => ChatTab(
           workId: widget.workId,
-          otherUserName: widget.isClient ? widget.technicianName : widget.clientName,
+          otherUserName:
+              widget.isClient ? widget.technicianName : widget.clientName,
           isClient: widget.isClient,
         ),
       ),
@@ -202,7 +203,8 @@ class _ChatConfirmationScreenState extends State<ChatConfirmationScreen>
                 // 🎯 ANIMATED ICON
                 ScaleTransition(
                   scale: Tween<double>(begin: 0.8, end: 1.0).animate(
-                    CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+                    CurvedAnimation(
+                        parent: _animationController, curve: Curves.easeInOut),
                   ),
                   child: Container(
                     width: 100,
@@ -315,7 +317,8 @@ class _ChatConfirmationScreenState extends State<ChatConfirmationScreen>
                 if (!_hasConfirmed)
                   ScaleTransition(
                     scale: Tween<double>(begin: 0.9, end: 1.0).animate(
-                      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+                      CurvedAnimation(
+                          parent: _pulseController, curve: Curves.easeInOut),
                     ),
                     child: SizedBox(
                       width: double.infinity,
@@ -341,7 +344,9 @@ class _ChatConfirmationScreenState extends State<ChatConfirmationScreen>
                               )
                             : const Icon(Icons.check_circle, size: 24),
                         label: Text(
-                          _isLoading ? 'Confirmando...' : '✅ Listo para Iniciar Chat',
+                          _isLoading
+                              ? 'Confirmando...'
+                              : '✅ Listo para Iniciar Chat',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,

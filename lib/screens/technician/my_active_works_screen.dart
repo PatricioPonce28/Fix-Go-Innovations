@@ -39,7 +39,7 @@ class _MyActiveWorksScreenState extends State<MyActiveWorksScreen> {
   Future<void> _goToWork(AcceptedWork work) async {
     // Cargar la solicitud completa
     final requests = await _requestService.getClientRequests();
-    
+
     // Intentar encontrar la solicitud, o crear una temporal
     ServiceRequest request;
     try {
@@ -97,10 +97,20 @@ class _MyActiveWorksScreenState extends State<MyActiveWorksScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Mis Trabajos Activos'),
+        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadWorks,
+          ),
+          Tooltip(
+            message: 'Volver al inicio',
+            child: IconButton(
+              icon: const Icon(Icons.home),
+              onPressed: () {
+                Navigator.popUntil(context, (route) => route.isFirst);
+              },
+            ),
           ),
         ],
       ),
@@ -132,36 +142,59 @@ class _MyActiveWorksScreenState extends State<MyActiveWorksScreen> {
                     itemCount: _works.length,
                     itemBuilder: (context, index) {
                       final work = _works[index];
-                      return Card(
+                      return Container(
                         margin: const EdgeInsets.only(bottom: 16),
-                        elevation: 3,
-                        child: InkWell(
-                          onTap: () => _goToWork(work),
-                          borderRadius: BorderRadius.circular(12),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          gradient: LinearGradient(
+                            colors: [Colors.white, Colors.blue[50]!],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          border: Border.all(
+                            color: Colors.blue[100]!,
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.blue.withOpacity(0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => _goToWork(work),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Estado y Badge
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Container(
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 12,
                                           vertical: 6,
                                         ),
                                         decoration: BoxDecoration(
                                           color: _getStatusColor(work.status),
-                                          borderRadius: BorderRadius.circular(20),
+                                          borderRadius:
+                                              BorderRadius.circular(20),
                                         ),
                                         child: Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             Text(
                                               work.status.icon,
-                                              style: const TextStyle(fontSize: 16),
+                                              style:
+                                                  const TextStyle(fontSize: 16),
                                             ),
                                             const SizedBox(width: 8),
                                             Text(
@@ -175,69 +208,129 @@ class _MyActiveWorksScreenState extends State<MyActiveWorksScreen> {
                                           ],
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 16),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Total',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey[600],
+                                      if (work.paymentStatus ==
+                                          PaymentStatus.completed)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.green[100],
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
+                                            '✓ Pagado',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.green[700],
+                                              fontWeight: FontWeight.bold,
+                                            ),
                                           ),
                                         ),
-                                        Text(
-                                          '\$${work.paymentAmount.toStringAsFixed(2)}',
-                                          style: const TextStyle(
-                                            fontSize: 20,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.green,
-                                          ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+
+                                  // Montos
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: Colors.blue[100]!,
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Monto Total',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey[600],
+                                              ),
+                                            ),
+                                            Text(
+                                              '\$${work.paymentAmount.toStringAsFixed(2)}',
+                                              style: const TextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.green,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        Container(
+                                          width: 1,
+                                          height: 40,
+                                          color: Colors.blue[100],
+                                        ),
+                                        Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.end,
+                                          children: [
+                                            Text(
+                                              'Tu Ganancia',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey[600],
+                                              ),
+                                            ),
+                                            Text(
+                                              '\$${work.technicianAmount?.toStringAsFixed(2) ?? '0.00'}',
+                                              style: const TextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.blue,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ],
-                                    ),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
-                                      children: [
-                                        Text(
-                                          'Tu Pago',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey[600],
-                                          ),
-                                        ),
-                                        Text(
-                                          '\$${work.technicianAmount?.toStringAsFixed(2) ?? '0.00'}',
-                                          style: const TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.blue,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 16),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton.icon(
-                                    onPressed: () => _goToWork(work),
-                                    icon: const Icon(Icons.chat),
-                                    label: const Text('Ir al Chat y Trabajo'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.orange,
-                                      foregroundColor: Colors.white,
                                     ),
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: 12),
+
+                                  // Botones de acción
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: OutlinedButton.icon(
+                                          onPressed: () => _goToWork(work),
+                                          icon: const Icon(Icons.chat),
+                                          label: const Text('Chat'),
+                                          style: OutlinedButton.styleFrom(
+                                            foregroundColor: Colors.blue,
+                                            side: BorderSide(
+                                                color: Colors.blue[300]!),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: ElevatedButton.icon(
+                                          onPressed: () => _goToWork(work),
+                                          icon: const Icon(Icons.arrow_forward),
+                                          label: const Text('Detalles'),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.blue,
+                                            foregroundColor: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),

@@ -19,7 +19,7 @@ class PaymentTab extends StatefulWidget {
 }
 
 class _PaymentTabState extends State<PaymentTab> {
-  String _selectedPaymentMethod = 'efectivo';
+  String _selectedPaymentMethod = 'tarjeta';
 
   Future<void> _processPayment() async {
     // Navegar a la pantalla de pago con Braintree
@@ -67,7 +67,8 @@ class _PaymentTabState extends State<PaymentTab> {
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            color: isPaid ? Colors.green[900] : Colors.orange[900],
+                            color:
+                                isPaid ? Colors.green[900] : Colors.orange[900],
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -138,41 +139,62 @@ class _PaymentTabState extends State<PaymentTab> {
 
             // Selector de método de pago
             Card(
-              child: Column(
-                children: [
-                  RadioListTile<String>(
-                    title: const Text('Efectivo'),
-                    subtitle: const Text('Pago en efectivo al técnico'),
-                    value: 'efectivo',
-                    groupValue: _selectedPaymentMethod,
-                    onChanged: (value) {
-                      setState(() => _selectedPaymentMethod = value!);
-                    },
-                    secondary: const Icon(Icons.money, color: Colors.green),
-                  ),
-                  const Divider(height: 1),
-                  RadioListTile<String>(
-                    title: const Text('Transferencia'),
-                    subtitle: const Text('Transferencia bancaria'),
-                    value: 'transferencia',
-                    groupValue: _selectedPaymentMethod,
-                    onChanged: (value) {
-                      setState(() => _selectedPaymentMethod = value!);
-                    },
-                    secondary: const Icon(Icons.account_balance, color: Colors.blue),
-                  ),
-                  const Divider(height: 1),
-                  RadioListTile<String>(
-                    title: const Text('Tarjeta de Crédito/Débito'),
-                    subtitle: const Text('Pago con tarjeta'),
-                    value: 'tarjeta',
-                    groupValue: _selectedPaymentMethod,
-                    onChanged: (value) {
-                      setState(() => _selectedPaymentMethod = value!);
-                    },
-                    secondary: const Icon(Icons.credit_card, color: Colors.orange),
-                  ),
-                ],
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.only(left: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.orange[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(Icons.credit_card,
+                          color: Colors.orange[700], size: 28),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Braintree',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Pago seguro con tarjeta',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      margin: const EdgeInsets.only(right: 16),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.green,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Text(
+                        'Recomendado',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 24),

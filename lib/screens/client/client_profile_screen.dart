@@ -20,7 +20,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _sectorController = TextEditingController();
-  
+
   bool _isEditing = false;
   bool _isLoading = false;
   ImageData? _newProfileImage;
@@ -79,23 +79,52 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // TODO: Implementar actualización de perfil
-      // Por ahora solo simula
-      await Future.delayed(const Duration(seconds: 1));
+      String? newPhotoUrl;
 
+      // Si hay una nueva foto, subirla
+      if (_newProfileImage != null) {
+        print('[SAVE PROFILE] Subiendo foto de perfil...');
+
+        try {
+          // Subir a Storage (parámetro: imageData, userId)
+          newPhotoUrl = await _storageService.uploadProfilePhoto(
+            _newProfileImage!,
+            widget.user.id,
+          );
+
+          print('[SAVE PROFILE] Foto subida: $newPhotoUrl');
+        } catch (uploadError) {
+          print('❌ Error subiendo foto: $uploadError');
+          // Continuar sin foto si hay error
+        }
+      }
+
+      // Actualizar datos del usuario en Supabase
+      print('[SAVE PROFILE] Actualizando perfil en BD...');
+      await _authService.updateUserProfile(
+        userId: widget.user.id,
+        fullName: _nameController.text,
+        phone: _phoneController.text,
+        sector: _sectorController.text,
+      );
+
+      print('[SAVE PROFILE] ✅ Perfil actualizado correctamente');
       setState(() {
         _isEditing = false;
         _isLoading = false;
       });
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Perfil actualizado correctamente'),
+          content: Text('✅ Perfil actualizado correctamente'),
           backgroundColor: Colors.green,
         ),
       );
     } catch (e) {
+      print('❌ Error guardando perfil: $e');
       setState(() => _isLoading = false);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: ${e.toString()}'),
@@ -155,12 +184,15 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                     backgroundImage: _newProfileImage != null
                         ? MemoryImage(_newProfileImage!.bytes)
                         : (widget.user.profilePhotoUrl != null
-                            ? NetworkImage(widget.user.profilePhotoUrl!) as ImageProvider
+                            ? NetworkImage(widget.user.profilePhotoUrl!)
+                                as ImageProvider
                             : null),
-                    child: _newProfileImage == null && widget.user.profilePhotoUrl == null
+                    child: _newProfileImage == null &&
+                            widget.user.profilePhotoUrl == null
                         ? Text(
                             widget.user.fullName[0].toUpperCase(),
-                            style: const TextStyle(fontSize: 40, color: Colors.white),
+                            style: const TextStyle(
+                                fontSize: 40, color: Colors.white),
                           )
                         : null,
                   ),
@@ -202,7 +234,8 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                     ),
                     const SizedBox(height: 16),
                     TextField(
-                      controller: TextEditingController(text: widget.user.email),
+                      controller:
+                          TextEditingController(text: widget.user.email),
                       enabled: false,
                       decoration: const InputDecoration(
                         labelText: 'Email',
@@ -212,75 +245,75 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                     const SizedBox(height: 16),
                     TextField(
                       controller: _phoneController,
-                  enabled: _isEditing,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Teléfono',
-                    prefixIcon: Icon(Icons.phone),
-                  ),
+                      enabled: _isEditing,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                        labelText: 'Teléfono',
+                        prefixIcon: Icon(Icons.phone),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _sectorController,
+                      enabled: _isEditing,
+                      decoration: const InputDecoration(
+                        labelText: 'Sector',
+                        prefixIcon: Icon(Icons.location_on),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _sectorController,
-                  enabled: _isEditing,
-                  decoration: const InputDecoration(
-                    labelText: 'Sector',
-                    prefixIcon: Icon(Icons.location_on),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
+            const SizedBox(height: 24),
+
+            // Botón guardar (solo si está editando)
+            if (_isEditing)
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _saveProfile,
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Guardar Cambios'),
+                ),
+              ),
+
+            if (!_isEditing) ...[
+              // Opciones adicionales
+              ListTile(
+                leading: const Icon(Icons.security),
+                title: const Text('Cambiar Contraseña'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.pushNamed(context, '/change_password');
+                },
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.help_outline),
+                title: const Text('Ayuda y Soporte'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.pushNamed(context, '/help_support');
+                },
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.logout, color: Colors.red),
+                title: const Text('Cerrar Sesión',
+                    style: TextStyle(color: Colors.red)),
+                onTap: _logout,
+              ),
+            ],
+          ],
         ),
-        const SizedBox(height: 24),
-
-        // Botón guardar (solo si está editando)
-        if (_isEditing)
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              onPressed: _isLoading ? null : _saveProfile,
-              child: _isLoading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Guardar Cambios'),
-            ),
-          ),
-
-        if (!_isEditing) ...[
-          // Opciones adicionales
-          ListTile(
-            leading: const Icon(Icons.security),
-            title: const Text('Cambiar Contraseña'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.pushNamed(context, '/change_password');
-            },
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.help_outline),
-            title: const Text('Ayuda y Soporte'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.pushNamed(context, '/help_support');
-            },
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.logout, color: Colors.red),
-            title: const Text('Cerrar Sesión', style: TextStyle(color: Colors.red)),
-            onTap: _logout,
-          ),
-        ],
-      ],
-    ),
-  ),
-);
+      ),
+    );
+  }
 }
-}
-

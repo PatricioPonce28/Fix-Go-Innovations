@@ -42,7 +42,8 @@ class QuotationService {
       // Si existe, actualizar; si no, crear
       String quotationNumber;
       if (existingQuotation != null) {
-        print('📝 Actualizando cotización existente: ${existingQuotation['quotation_number']}');
+        print(
+            '📝 Actualizando cotización existente: ${existingQuotation['quotation_number']}');
         quotationNumber = existingQuotation['quotation_number'];
       } else {
         // Generar número de cotización solo si es nueva
@@ -86,7 +87,7 @@ class QuotationService {
             .from('quotations')
             .update(quotationData)
             .eq('id', existingQuotation['id']);
-        
+
         print('✅ Cotización actualizada: $quotationNumber');
       } else {
         // Insertar nueva cotización
@@ -223,7 +224,7 @@ class QuotationService {
   Future<Map<String, dynamic>> acceptQuotationWithNavigation(
       String quotationId) async {
     try {
-      print('🔄 [CHAT] Aceptando cotización: $quotationId');
+      print('🔄 [ACCEPT] Iniciando aceptación de cotización: $quotationId');
 
       // 1. Obtener datos de la cotización antes de aceptar
       final quotation = await _supabase
@@ -232,50 +233,68 @@ class QuotationService {
           .eq('id', quotationId)
           .single();
 
-      print('📋 [CHAT] Datos obtenidos:');
-      print('  - Status: ${quotation['status']}');
-      print('  - Total: ${quotation['total_amount']}');
+      print('📋 [ACCEPT] Cotización actual:');
+      print('  ├─ Status: ${quotation['status']}');
+      print('  ├─ Total: \$${quotation['total_amount']}');
+      print('  ├─ Request ID: ${quotation['request_id']}');
+      print('  ├─ Client ID: ${quotation['client_id']}');
+      print('  └─ Technician ID: ${quotation['technician_id']}');
 
-      // 2. Aceptar cotización
+      // 2. Actualizar cotización a aceptada (esto dispara el trigger)
       await _supabase
           .from('quotations')
           .update({'status': 'accepted'}).eq('id', quotationId);
 
-      print('✅ [CHAT] Cotización aceptada en DB');
+      print('✅ [ACCEPT] Cotización marcada como aceptada en BD');
 
-      // 3. Esperar a que el trigger cree el trabajo
-      print('⏳ [CHAT] Esperando creación del trabajo...');
-      await Future.delayed(const Duration(seconds: 2));
+      // 3. Esperar a que el trigger cree el trabajo (aumentado a 3 segundos)
+      print('⏳ [ACCEPT] Esperando que el trigger cree el trabajo...');
+      await Future.delayed(const Duration(seconds: 3));
 
-      // 4. Buscar el trabajo creado
+      // 4. Buscar el trabajo creado por el trigger
+      print('🔍 [ACCEPT] Buscando trabajo creado...');
       final work = await _supabase
           .from('accepted_works')
           .select('*')
           .eq('quotation_id', quotationId)
-          .single();
+          .maybeSingle();
 
-      print('🎉 [CHAT] Trabajo encontrado: ${work['id']}');
+      if (work != null) {
+        print('🎉 [ACCEPT] ¡Trabajo encontrado! ID: ${work['id']}');
+        print('  ├─ Monto de pago: \$${work['payment_amount']}');
+        print('  ├─ Comisión plataforma: \$${work['platform_fee']}');
+        print('  └─ Estado de pago: ${work['payment_status']}');
 
-      return {
-        'success': true,
-        'work': work,
-        'message': 'Cotización aceptada. Redirigiendo al chat...',
-      };
+        return {
+          'success': true,
+          'work': work,
+          'message': 'Cotización aceptada. Trabajo creado por trigger.',
+        };
+      } else {
+        throw Exception(
+            'El trabajo no se creó tras 3 segundos. El trigger puede no haber funcionado.');
+      }
     } catch (e) {
-      print('❌ [CHAT] Error: $e');
+      print('❌ [ACCEPT] Error en trigger: $e');
+      print('🛠️ [ACCEPT] Intentando crear trabajo manualmente...');
 
-      // Intentar crear manualmente si falla el trigger
-      print('🛠️ [CHAT] Intentando crear trabajo manualmente...');
       try {
+        // Obtener datos nuevamente para crear manualmente
         final quotation = await _supabase
             .from('quotations')
             .select('*')
             .eq('id', quotationId)
             .single();
 
-        final totalAmount = quotation['total_amount'] as double;
-        final platformFee = totalAmount * 0.10;
-        final technicianAmount = totalAmount - platformFee;
+        final totalAmount = (quotation['total_amount'] ?? 0.0) as num;
+        final platformFee = (totalAmount * 0.10).toDouble();
+        final technicianAmount = (totalAmount - platformFee).toDouble();
+
+        print('📝 [ACCEPT] Creando trabajo manualmente con:');
+        print('  ├─ Request: ${quotation['request_id']}');
+        print('  ├─ Client: ${quotation['client_id']}');
+        print('  ├─ Technician: ${quotation['technician_id']}');
+        print('  └─ Monto: \$${totalAmount}');
 
         final manualWork = await _supabase
             .from('accepted_works')
@@ -285,7 +304,7 @@ class QuotationService {
               'client_id': quotation['client_id'],
               'technician_id': quotation['technician_id'],
               'status': 'pending_payment',
-              'payment_amount': totalAmount,
+              'payment_amount': totalAmount.toDouble(),
               'platform_fee': platformFee,
               'technician_amount': technicianAmount,
               'payment_status': 'pending',
@@ -293,19 +312,20 @@ class QuotationService {
             .select()
             .single();
 
-        print('✅ [CHAT] Trabajo creado manualmente: ${manualWork['id']}');
+        print('✅ [ACCEPT] Trabajo creado manualmente: ${manualWork['id']}');
 
         return {
           'success': true,
           'work': manualWork,
-          'message': 'Trabajo creado manualmente',
+          'message': 'Trabajo creado manualmente (trigger falló)',
         };
       } catch (e2) {
-        print('❌ [CHAT] Error manual también: $e2');
+        print('❌ [ACCEPT] Error también en creación manual: $e2');
+
         return {
           'success': false,
-          'error': e.toString(),
-          'message': 'Error completo: $e2',
+          'error': 'No se pudo crear el trabajo',
+          'message': 'Trigger error: $e | Manual error: $e2',
         };
       }
     }
