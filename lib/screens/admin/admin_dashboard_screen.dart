@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/user_model.dart';
 import '../../models/admin/admin_models.dart';
+import '../../models/service_request_model.dart';
+import '../../models/quotation_model.dart';
 import '../../services/admin_service.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
@@ -370,7 +372,8 @@ class _DashboardTab extends StatelessWidget {
                         'Comisión: \$${transaction.platformFee.toStringAsFixed(2)} • ${transaction.paymentMethod}',
                       ),
                       trailing: Text(
-                        DateFormat('dd/MM/yyyy').format(transaction.transactionDate),
+                        DateFormat('dd/MM/yyyy')
+                            .format(transaction.transactionDate),
                         style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                       ),
                     ),
@@ -574,30 +577,369 @@ class _UsersTabState extends State<_UsersTab> {
   }
 }
 
-// ==================== PLACEHOLDER TABS ====================
-class _RequestsTab extends StatelessWidget {
+// ==================== REQUESTS TAB ====================
+class _RequestsTab extends StatefulWidget {
+  @override
+  State<_RequestsTab> createState() => _RequestsTabState();
+}
+
+class _RequestsTabState extends State<_RequestsTab> {
+  final _adminService = AdminService();
+  List<ServiceRequest> _requests = [];
+  bool _isLoading = true;
+  String _statusFilter = 'all';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRequests();
+  }
+
+  Future<void> _loadRequests() async {
+    setState(() => _isLoading = true);
+    final requests = await _adminService.getAllRequests(
+      statusFilter: _statusFilter == 'all' ? null : _statusFilter,
+    );
+    setState(() {
+      _requests = requests;
+      _isLoading = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Text('Vista de Solicitudes - En construcción'),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                ChoiceChip(
+                  label: const Text('Todas'),
+                  selected: _statusFilter == 'all',
+                  onSelected: (_) {
+                    setState(() => _statusFilter = 'all');
+                    _loadRequests();
+                  },
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('Pendientes'),
+                  selected: _statusFilter == 'pending',
+                  onSelected: (_) {
+                    setState(() => _statusFilter = 'pending');
+                    _loadRequests();
+                  },
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('En progreso'),
+                  selected: _statusFilter == 'in_progress',
+                  onSelected: (_) {
+                    setState(() => _statusFilter = 'in_progress');
+                    _loadRequests();
+                  },
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('Completadas'),
+                  selected: _statusFilter == 'completed',
+                  onSelected: (_) {
+                    setState(() => _statusFilter = 'completed');
+                    _loadRequests();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _requests.isEmpty
+                  ? const Center(child: Text('No hay solicitudes'))
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: _requests.length,
+                      itemBuilder: (context, index) {
+                        final request = _requests[index];
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            leading:
+                                Icon(Icons.assignment, color: Colors.blue[700]),
+                            title: Text(request.title),
+                            subtitle: Text(request.description),
+                            isThreeLine: true,
+                            trailing: Chip(
+                              label: Text(request.status.name),
+                              backgroundColor: request.status.name == 'pending'
+                                  ? Colors.orange[100]
+                                  : request.status.name == 'in_progress'
+                                      ? Colors.blue[100]
+                                      : Colors.green[100],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+        ),
+      ],
     );
   }
 }
 
-class _QuotationsTab extends StatelessWidget {
+// ==================== QUOTATIONS TAB ====================
+class _QuotationsTab extends StatefulWidget {
+  @override
+  State<_QuotationsTab> createState() => _QuotationsTabState();
+}
+
+class _QuotationsTabState extends State<_QuotationsTab> {
+  final _adminService = AdminService();
+  List<Quotation> _quotations = [];
+  bool _isLoading = true;
+  String _statusFilter = 'all';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadQuotations();
+  }
+
+  Future<void> _loadQuotations() async {
+    setState(() => _isLoading = true);
+    final quotations = await _adminService.getAllQuotations(
+      statusFilter: _statusFilter == 'all' ? null : _statusFilter,
+    );
+    setState(() {
+      _quotations = quotations;
+      _isLoading = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Text('Vista de Cotizaciones - En construcción'),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                ChoiceChip(
+                  label: const Text('Todas'),
+                  selected: _statusFilter == 'all',
+                  onSelected: (_) {
+                    setState(() => _statusFilter = 'all');
+                    _loadQuotations();
+                  },
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('Pendientes'),
+                  selected: _statusFilter == 'pending',
+                  onSelected: (_) {
+                    setState(() => _statusFilter = 'pending');
+                    _loadQuotations();
+                  },
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('Aceptadas'),
+                  selected: _statusFilter == 'accepted',
+                  onSelected: (_) {
+                    setState(() => _statusFilter = 'accepted');
+                    _loadQuotations();
+                  },
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('Rechazadas'),
+                  selected: _statusFilter == 'rejected',
+                  onSelected: (_) {
+                    setState(() => _statusFilter = 'rejected');
+                    _loadQuotations();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _quotations.isEmpty
+                  ? const Center(child: Text('No hay cotizaciones'))
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: _quotations.length,
+                      itemBuilder: (context, index) {
+                        final quotation = _quotations[index];
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            leading: Icon(Icons.description,
+                                color: Colors.purple[700]),
+                            title: Text(
+                              quotation.quotationNumber,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: Text(
+                              '\$${quotation.totalAmount.toStringAsFixed(2)}',
+                              style: TextStyle(
+                                color: Colors.green[700],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            isThreeLine: true,
+                            trailing: Chip(
+                              label: Text(quotation.status.name),
+                              backgroundColor:
+                                  quotation.status.name == 'pending'
+                                      ? Colors.orange[100]
+                                      : quotation.status.name == 'accepted'
+                                          ? Colors.green[100]
+                                          : Colors.red[100],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+        ),
+      ],
     );
   }
 }
 
-class _PaymentsTab extends StatelessWidget {
+// ==================== PAYMENTS TAB ====================
+class _PaymentsTab extends StatefulWidget {
+  @override
+  State<_PaymentsTab> createState() => _PaymentsTabState();
+}
+
+class _PaymentsTabState extends State<_PaymentsTab> {
+  final _adminService = AdminService();
+  List<PaymentTransaction> _transactions = [];
+  bool _isLoading = true;
+  String _statusFilter = 'all';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTransactions();
+  }
+
+  Future<void> _loadTransactions() async {
+    setState(() => _isLoading = true);
+    final transactions = await _adminService.getAllTransactions(
+      statusFilter: _statusFilter == 'all' ? null : _statusFilter,
+    );
+    setState(() {
+      _transactions = transactions;
+      _isLoading = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Text('Vista de Pagos - En construcción'),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                ChoiceChip(
+                  label: const Text('Todas'),
+                  selected: _statusFilter == 'all',
+                  onSelected: (_) {
+                    setState(() => _statusFilter = 'all');
+                    _loadTransactions();
+                  },
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('Pendientes'),
+                  selected: _statusFilter == 'pending',
+                  onSelected: (_) {
+                    setState(() => _statusFilter = 'pending');
+                    _loadTransactions();
+                  },
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('Completadas'),
+                  selected: _statusFilter == 'completed',
+                  onSelected: (_) {
+                    setState(() => _statusFilter = 'completed');
+                    _loadTransactions();
+                  },
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('Fallidas'),
+                  selected: _statusFilter == 'failed',
+                  onSelected: (_) {
+                    setState(() => _statusFilter = 'failed');
+                    _loadTransactions();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _transactions.isEmpty
+                  ? const Center(child: Text('No hay transacciones'))
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: _transactions.length,
+                      itemBuilder: (context, index) {
+                        final transaction = _transactions[index];
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            leading: Icon(
+                              transaction.status == 'completed'
+                                  ? Icons.check_circle
+                                  : transaction.status == 'failed'
+                                      ? Icons.cancel
+                                      : Icons.pending,
+                              color: transaction.status == 'completed'
+                                  ? Colors.green
+                                  : transaction.status == 'failed'
+                                      ? Colors.red
+                                      : Colors.orange,
+                            ),
+                            title: Text(
+                              '\$${transaction.totalAmount.toStringAsFixed(2)}',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: Text(
+                              '${transaction.paymentMethod} • Comisión: \$${transaction.platformFee.toStringAsFixed(2)}',
+                            ),
+                            isThreeLine: true,
+                            trailing: Text(
+                              DateFormat('dd/MM/yyyy')
+                                  .format(transaction.transactionDate),
+                              style: TextStyle(
+                                  fontSize: 12, color: Colors.grey[600]),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+        ),
+      ],
     );
   }
 }
