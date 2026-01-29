@@ -20,6 +20,7 @@ class AuthService {
       final AuthResponse authResponse = await _supabase.auth.signUp(
         email: user.email,
         password: password,
+        emailRedirectTo: 'io.supabase.fixgoinnovations://login-callback',
       );
 
       if (authResponse.user == null) {
@@ -107,6 +108,7 @@ class AuthService {
       await _supabase.auth.signUp(
         email: email,
         password: 'temporary_pass_12345', // Temporal, solo para reenviar
+        emailRedirectTo: 'io.supabase.fixgoinnovations://login-callback',
       );
       
       print('✅ Email de confirmación reenviado');

@@ -3,15 +3,21 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/auth_service.dart';
 
 class EmailVerificationScreen extends StatefulWidget {
-  final String email;
-  final String userType;
-  final String userName;
+  final String? email;
+  final String? userType;
+  final String? userName;
+  final String? token; // Token from deep link
+  final String? type; // 'signup', 'recovery', etc
+  final bool isDeepLink; // Flag para saber si vino por deep link
 
   const EmailVerificationScreen({
     super.key,
-    required this.email,
-    required this.userType,
-    required this.userName,
+    this.email,
+    this.userType,
+    this.userName,
+    this.token,
+    this.type = 'signup',
+    this.isDeepLink = false,
   });
 
   @override
@@ -32,7 +38,48 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
   @override
   void initState() {
     super.initState();
-    _startVerificationCheck();
+    // Si viene por deep link, verificar el token directamente
+    if (widget.isDeepLink && widget.token != null && widget.token!.isNotEmpty) {
+      _verifyTokenWithSupabase();
+    } else {
+      // Si no es deep link, iniciar verificación normal
+      _startVerificationCheck();
+    }
+  }
+
+  /// 🔐 Verificar token con Supabase (para deep links de confirmación de email)
+  Future<void> _verifyTokenWithSupabase() async {
+    try {
+      debugPrint('🔍 Verificando token de confirmación: ${widget.token}');
+      
+      setState(() => _isLoading = true);
+
+      // Verificar OTP token con Supabase para signup
+      final response = await _supabase.auth.verifyOTP(
+        token: widget.token!,
+        type: OtpType.signup,
+        email: widget.email,
+      );
+
+      if (response.user != null) {
+        setState(() {
+          _isVerified = true;
+        });
+        debugPrint('✅ Email confirmado exitosamente por deep link');
+
+        // Esperar 2 segundos y redirigir a login
+        await Future.delayed(const Duration(seconds: 2));
+        if (mounted) {
+          Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Error verificando token: $e');
+      setState(() {
+        _isLoading = false;
+        _showResendOption = true;
+      });
+    }
   }
 
   void _startVerificationCheck() {
@@ -41,8 +88,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
 
   Future<void> _checkEmailVerification() async {
     if (!mounted) return;
-    
-    setState(() => _isLoading = true);
 
     try {
       await Future.delayed(const Duration(seconds: 2));
@@ -112,10 +157,20 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
   }
 
   Future<void> _resendVerificationEmail() async {
+    if (widget.email == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Error: Email no disponible'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
-      final result = await _authService.resendConfirmationEmail(widget.email);
+      final result = await _authService.resendConfirmationEmail(widget.email!);
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

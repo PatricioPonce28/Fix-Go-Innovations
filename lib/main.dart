@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:go_router/go_router.dart';
 import 'core/supabase_client.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/forgot_password_screen.dart';
 import 'screens/auth/reset_password_screen.dart';
+import 'screens/auth/email_verification_screen.dart';
 import 'screens/help/help_support_screen.dart';
 import 'screens/profile/change_password_screen.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -62,9 +64,95 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    // 🔗 GoRouter Setup with Deep Link Support
+    final router = GoRouter(
+      routes: [
+        // 🏠 Home/Login Route
+        GoRoute(
+          path: '/',
+          builder: (context, state) => const LoginScreen(),
+        ),
+        
+        // 🔐 Login Route
+        GoRoute(
+          path: '/login',
+          builder: (context, state) => const LoginScreen(),
+        ),
+        
+        // ❓ Forgot Password Route
+        GoRoute(
+          path: '/forgot-password',
+          builder: (context, state) => const ForgotPasswordScreen(),
+        ),
+        
+        // 🔗 DEEP LINK: Reset Password Route
+        // Handles: https://vercel-deeplink.vercel.app/reset-password?token=XXX&type=recovery
+        // Also handles: fixgo://reset-password?token=XXX
+        GoRoute(
+          path: '/reset-password',
+          builder: (context, state) {
+            // Extract token from query parameters
+            final token = state.uri.queryParameters['token'] ?? 
+                         state.uri.queryParameters['access_token'] ?? '';
+            final type = state.uri.queryParameters['type'] ?? 'recovery';
+            
+            debugPrint('🔗 Deep Link URI: ${state.uri}');
+            debugPrint('🔐 Token: $token, Type: $type');
+            
+            return ResetPasswordScreen(
+              token: token,
+              type: type,
+              isDeepLink: true,
+            );
+          },
+        ),
+        
+        // 🔗 DEEP LINK: Confirm Email Route
+        // Handles: https://vercel-deeplink.vercel.app/confirm-email?token=XXX&type=signup
+        // Also handles: fixgo://confirm-email?token=XXX
+        GoRoute(
+          path: '/confirm-email',
+          builder: (context, state) {
+            // Extract token from query parameters
+            final token = state.uri.queryParameters['token'] ?? 
+                         state.uri.queryParameters['access_token'] ?? '';
+            final type = state.uri.queryParameters['type'] ?? 'signup';
+            
+            debugPrint('🔗 Deep Link URI: ${state.uri}');
+            debugPrint('📧 Token: $token, Type: $type');
+            
+            return EmailVerificationScreen(
+              token: token,
+              type: type,
+              isDeepLink: true,
+            );
+          },
+        ),
+        
+        // 🔑 Change Password Route
+        GoRoute(
+          path: '/change-password',
+          builder: (context, state) => const ChangePasswordScreen(),
+        ),
+        
+        // ❓ Help & Support Route
+        GoRoute(
+          path: '/help-support',
+          builder: (context, state) => const HelpSupportScreen(),
+        ),
+      ],
+      
+      // Handle deep links and redirects
+      redirect: (context, state) {
+        debugPrint('📍 GoRouter Redirect: ${state.uri}');
+        return null;
+      },
+    );
+    
+    return MaterialApp.router(
       title: 'Fix&Go Innovations',
       debugShowCheckedModeBanner: false,
+      routerConfig: router,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF2196F3),
@@ -88,17 +176,6 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const LoginScreen(),
-      routes: {
-        '/login': (context) => const LoginScreen(),
-        '/forgot_password': (context) => const ForgotPasswordScreen(),
-        '/reset_password': (context) {
-          final email = ModalRoute.of(context)?.settings.arguments as String? ?? '';
-          return ResetPasswordScreen(email: email);
-        },
-        '/change_password': (context) => const ChangePasswordScreen(),
-        '/help_support': (context) => const HelpSupportScreen(),
-      },
     );
   }
 }

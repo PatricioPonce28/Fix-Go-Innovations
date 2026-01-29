@@ -35,6 +35,48 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <!-- 🔗 DEEP LINKING - Enable Flutter Deep Linking -->
+            <meta-data
+              android:name="flutter_deeplinking_enabled"
+              android:value="true"
+              />
+            <!-- 🌐 HTTPS Deep Links con App Links (Vercel fallback) -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <!-- Reset Password -->
+                <data
+                    android:scheme="https"
+                    android:host="vercel-deeplink.vercel.app"
+                    android:pathPrefix="/reset-password" />
+
+                <!-- Confirm Email -->
+                <data
+                    android:scheme="https"
+                    android:host="vercel-deeplink.vercel.app"
+                    android:pathPrefix="/confirm-email" />
+
+                <!-- Opcional: wildcard para cubrir cualquier sub-path o query params extra (muy útil con Supabase) -->
+                <!-- <data
+                    android:scheme="https"
+                    android:host="vercel-deeplink.vercel.app"
+                    android:pathPattern="/.*" /> -->
+            </intent-filter>
+
+            <!-- 📱 Custom Scheme (fixgo://) para desarrollo y fallback -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="fixgo" android:host="reset-password" />
+                <data android:scheme="fixgo" android:host="confirm-email" />
+
+                <!-- Opcional: wildcard para custom scheme -->
+                <!-- <data android:scheme="fixgo" android:pathPattern="/.*" /> -->
+            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>

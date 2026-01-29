@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/auth_service.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   final String? email;
   final String? token;
+  final String? type; // 'recovery', 'signup', etc
+  final bool isDeepLink; // Flag para saber si vino por deep link
 
   const ResetPasswordScreen({
     super.key,
     this.email,
     this.token,
+    this.type = 'recovery',
+    this.isDeepLink = false,
   });
 
   @override
@@ -17,6 +22,7 @@ class ResetPasswordScreen extends StatefulWidget {
 
 class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   final _authService = AuthService();
+  final _supabase = Supabase.instance.client;
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   
@@ -25,6 +31,46 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   bool _showConfirmPassword = false;
   String? _errorMessage;
   String? _successMessage;
+  bool _tokenVerified = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Si viene por deep link, verificar el token con Supabase
+    if (widget.isDeepLink && widget.token != null && widget.token!.isNotEmpty) {
+      _verifyTokenWithSupabase();
+    } else {
+      _tokenVerified = true; // Si no es deep link, permiter cambio directo
+    }
+  }
+
+  /// 🔐 Verificar token con Supabase (para deep links)
+  Future<void> _verifyTokenWithSupabase() async {
+    try {
+      debugPrint('🔍 Verificando token: ${widget.token}');
+      
+      // Verificar OTP token con Supabase
+      final response = await _supabase.auth.verifyOTP(
+        token: widget.token!,
+        type: OtpType.recovery,
+        email: widget.email,
+      );
+
+      if (response.user != null) {
+        setState(() {
+          _tokenVerified = true;
+          _successMessage = '✅ Token verificado. Ahora puedes cambiar tu contraseña.';
+        });
+        debugPrint('✅ Token verificado exitosamente');
+      }
+    } catch (e) {
+      debugPrint('❌ Error verificando token: $e');
+      setState(() {
+        _tokenVerified = false;
+        _errorMessage = 'Token inválido o expirado. Por favor intenta de nuevo.';
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -35,6 +81,12 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
   Future<void> _handleResetPassword() async {
     setState(() => _errorMessage = null);
+
+    // Validar que token esté verificado si es deep link
+    if (widget.isDeepLink && !_tokenVerified) {
+      setState(() => _errorMessage = 'El token no ha sido verificado. Por favor intenta de nuevo.');
+      return;
+    }
 
     if (_newPasswordController.text.isEmpty) {
       setState(() => _errorMessage = 'Por favor ingresa tu nueva contraseña');
@@ -58,14 +110,26 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
     setState(() => _isLoading = true);
 
-    // Cambiar contraseña directamente (Supabase maneja el token en background)
-    final result = await _authService.updatePassword(_newPasswordController.text);
+    try {
+      // 🔐 Si viene por deep link, usar Supabase directamente (ya tiene sesión)
+      if (widget.isDeepLink && widget.token != null) {
+        debugPrint('🔄 Actualizando contraseña vía deep link...');
+        await _supabase.auth.updateUser(
+          UserAttributes(password: _newPasswordController.text),
+        );
+        debugPrint('✅ Contraseña actualizada por deep link');
+      } else {
+        // 🔑 Si no es deep link, usar updatePassword estándar
+        debugPrint('🔄 Actualizando contraseña directamente...');
+        final result = await _authService.updatePassword(_newPasswordController.text);
+        if (!result['success']) {
+          throw Exception(result['message']);
+        }
+      }
 
-    if (!mounted) return;
-
-    setState(() => _isLoading = false);
-
-    if (result['success']) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      
       setState(() => _successMessage = '✅ Contraseña actualizada exitosamente');
       
       ScaffoldMessenger.of(context).showSnackBar(
@@ -79,16 +143,20 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       _newPasswordController.clear();
       _confirmPasswordController.clear();
 
-      // Volver a login
+      // Volver a login después de 2 segundos
       await Future.delayed(const Duration(seconds: 2));
       if (mounted) {
         Navigator.pop(context);
       }
-    } else {
-      setState(() => _errorMessage = result['message']);
+    } catch (e) {
+      debugPrint('❌ Error al actualizar contraseña: $e');
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      
+      setState(() => _errorMessage = 'Error: ${e.toString()}');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('❌ ${result['message']}'),
+          content: Text('❌ Error: ${e.toString()}'),
           backgroundColor: Colors.red,
           duration: const Duration(seconds: 3),
         ),
@@ -177,6 +245,41 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 color: Colors.grey[600],
               ),
             ),
+            const SizedBox(height: 24),
+
+            // 🔗 Token Verification Status (para Deep Links)
+            if (widget.isDeepLink)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _tokenVerified ? Colors.green[50] : Colors.orange[50],
+                  border: Border.all(
+                    color: _tokenVerified ? Colors.green : Colors.orange,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _tokenVerified ? Icons.verified : Icons.info,
+                      color: _tokenVerified ? Colors.green : Colors.orange,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _tokenVerified 
+                          ? '✅ Token verificado. Puedes cambiar tu contraseña.'
+                          : '⏳ Verificando token...',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _tokenVerified ? Colors.green[700] : Colors.orange[700],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 32),
 
             if (_errorMessage != null)

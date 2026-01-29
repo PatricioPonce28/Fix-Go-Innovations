@@ -18,6 +18,9 @@ dependencies:
   # Variables de entorno
   flutter_dotenv: ^5.1.0
   
+  # 🔗 Deep Linking & Navigation
+  go_router: ^13.0.0
+  
   # Utilidades
   cupertino_icons: ^1.0.2
 
