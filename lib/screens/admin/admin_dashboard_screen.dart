@@ -4,7 +4,7 @@ import '../../models/user_model.dart';
 import '../../models/admin/admin_models.dart';
 import '../../models/service_request_model.dart';
 import '../../models/quotation_model.dart';
-import '../../services/admin_service.dart';
+import '../../services/admin/admin_service.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
 

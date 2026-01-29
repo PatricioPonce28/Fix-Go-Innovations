@@ -351,4 +351,6 @@ class AdminService {
       return [];
     }
   }
+
+  Future<dynamic> getAllUsers({required String roleFilter}) async {}
 }
