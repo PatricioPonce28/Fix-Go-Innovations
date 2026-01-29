@@ -16,7 +16,7 @@ void main() async {
   await initializeDateFormatting('es_ES', null);
 
   try {
-    // 1. Cargar variables de entorno
+    // 1. Cargar variables de entorno (para otras configuraciones)
     await dotenv.load(fileName: '.env');
     print('✅ Variables de entorno cargadas');
 
@@ -26,36 +26,11 @@ void main() async {
 
     runApp(const MyApp());
   } catch (e, stackTrace) {
-    print('Error crítico en inicialización: $e');
-    print('Stack trace: $stackTrace');
-
-    // Mostrar pantalla de error
-    runApp(MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                const SizedBox(height: 16),
-                const Text(
-                  'Error de Configuración',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  e.toString(),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.red),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    ));
+    // No fallar si el .env no existe - las claves críticas están en el código
+    print('⚠️ Advertencia durante inicialización: $e');
+    // Continuar sin error crítico
+    await SupabaseService().initialize();
+    runApp(const MyApp());
   }
 }
 

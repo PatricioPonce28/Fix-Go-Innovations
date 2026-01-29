@@ -1,22 +1,19 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/payment_model.dart';
 
 class PaymentService {
   final supabase = Supabase.instance.client;
 
-  late final String _braintreeTokenizationKey;
+  // 🔑 Clave de tokenización de Braintree (Sandbox)
+  static const String _braintreeTokenizationKey =
+      'sandbox_pjypmnzx_54phx4kqg59jj2r8';
 
   PaymentService() {
-    _braintreeTokenizationKey = dotenv.env['BRAINTREE_TOKENIZATION_KEY'] ?? '';
-    
-    if (_braintreeTokenizationKey.isEmpty) {
-      print('⚠️ ADVERTENCIA: BRAINTREE_TOKENIZATION_KEY no configurada en .env');
-    }
+    print('✅ PaymentService inicializado con Braintree');
   }
 
   /// Obtener la tokenization key de Braintree
-  String getTokenizationKey() => _braintreeTokenizationKey;
+  static String getTokenizationKey() => _braintreeTokenizationKey;
 
   /// Generar ID único para pago (métod accesible públicamente)
   String generatePaymentId() {
@@ -72,14 +69,11 @@ class PaymentService {
     required String braintreeTransactionId,
   }) async {
     try {
-      await supabase
-          .from('payments')
-          .update({
-            'status': 'completed',
-            'braintree_transaction_id': braintreeTransactionId,
-            'completed_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', paymentId);
+      await supabase.from('payments').update({
+        'status': 'completed',
+        'braintree_transaction_id': braintreeTransactionId,
+        'completed_at': DateTime.now().toIso8601String(),
+      }).eq('id', paymentId);
 
       // Obtener y retornar pago actualizado
       return await getPayment(paymentId);
@@ -95,13 +89,10 @@ class PaymentService {
     required String failureReason,
   }) async {
     try {
-      await supabase
-          .from('payments')
-          .update({
-            'status': 'failed',
-            'failure_reason': failureReason,
-          })
-          .eq('id', paymentId);
+      await supabase.from('payments').update({
+        'status': 'failed',
+        'failure_reason': failureReason,
+      }).eq('id', paymentId);
 
       print('⚠️ Pago marcado como fallido: $paymentId');
     } catch (e) {
@@ -112,11 +103,8 @@ class PaymentService {
   /// Obtener detalles del pago
   Future<Payment> getPayment(String paymentId) async {
     try {
-      final response = await supabase
-          .from('payments')
-          .select()
-          .eq('id', paymentId)
-          .single();
+      final response =
+          await supabase.from('payments').select().eq('id', paymentId).single();
 
       return Payment.fromJson(response);
     } catch (e) {
@@ -161,10 +149,8 @@ class PaymentService {
   /// Obtener pagos por trabajo
   Future<List<Payment>> getWorkPayments(String workId) async {
     try {
-      final response = await supabase
-          .from('payments')
-          .select()
-          .eq('work_id', workId);
+      final response =
+          await supabase.from('payments').select().eq('work_id', workId);
 
       return (response as List)
           .map((p) => Payment.fromJson(p as Map<String, dynamic>))
@@ -180,13 +166,10 @@ class PaymentService {
     String? reason,
   }) async {
     try {
-      await supabase
-          .from('payments')
-          .update({
-            'status': 'refunded',
-            'failure_reason': reason ?? 'Reembolso solicitado',
-          })
-          .eq('id', paymentId);
+      await supabase.from('payments').update({
+        'status': 'refunded',
+        'failure_reason': reason ?? 'Reembolso solicitado',
+      }).eq('id', paymentId);
 
       print('✅ Pago reembolsado: $paymentId');
     } catch (e) {
@@ -235,14 +218,13 @@ class PaymentService {
           newStatus = PaymentStatus.processing;
       }
 
-      await supabase
-          .from('payments')
-          .update({
-            'status': newStatus.toString().split('.').last,
-            'braintree_transaction_id': transactionId,
-            'completed_at': newStatus == PaymentStatus.completed ? DateTime.now().toIso8601String() : null,
-          })
-          .eq('id', paymentId);
+      await supabase.from('payments').update({
+        'status': newStatus.toString().split('.').last,
+        'braintree_transaction_id': transactionId,
+        'completed_at': newStatus == PaymentStatus.completed
+            ? DateTime.now().toIso8601String()
+            : null,
+      }).eq('id', paymentId);
 
       print('✅ Webhook de Braintree procesado: $paymentId -> $status');
     } catch (e) {

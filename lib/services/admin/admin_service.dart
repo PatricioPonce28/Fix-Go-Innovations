@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../models/service_request_model.dart';
+import '../../models/quotation_model.dart';
+import '../../models/admin/admin_models.dart';
 
 class AdminService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -63,7 +66,7 @@ class AdminService {
       final response = await _supabase
           .from('user_profiles')
           .select('id, full_name, role, email, created_at')
-          .eq('role', 'technician')
+          .filter('role', 'eq', 'technician')
           .order('created_at', ascending: false)
           .limit(10);
 
@@ -164,7 +167,7 @@ class AdminService {
       final response = await _supabase
           .from('activity_logs')
           .select('user_id, user_email, description, created_at')
-          .eq('action_type', 'user_blocked')
+          .filter('action_type', 'eq', 'user_blocked')
           .order('created_at', ascending: false)
           .limit(20);
 
@@ -181,7 +184,7 @@ class AdminService {
       final response = await _supabase
           .from('activity_logs')
           .select('description')
-          .eq('action_type', 'report_created');
+          .filter('action_type', 'eq', 'report_created');
 
       final Map<String, int> stats = {};
 
@@ -203,8 +206,8 @@ class AdminService {
       final response = await _supabase
           .from('activity_logs')
           .select('entity_id, entity_type, description')
-          .eq('action_type', 'report_created')
-          .eq('entity_type', 'user')
+          .filter('action_type', 'eq', 'report_created')
+          .filter('entity_type', 'eq', 'user')
           .order('created_at', ascending: false)
           .limit(50);
 
@@ -282,4 +285,72 @@ class AdminService {
       };
     }
   }
+
+  // ==================== OBTENER TODAS LAS SOLICITUDES ====================
+  Future<List<ServiceRequest>> getAllRequests({String? statusFilter}) async {
+    try {
+      final response = await _supabase
+          .from('service_requests')
+          .select()
+          .order('created_at', ascending: false);
+
+      final requests = (response as List)
+          .map((item) => ServiceRequest.fromJson(item))
+          .toList();
+
+      if (statusFilter != null && statusFilter != 'all') {
+        return requests.where((r) => r.status.name == statusFilter).toList();
+      }
+      return requests;
+    } catch (e) {
+      debugPrint('Error fetching requests: $e');
+      return [];
+    }
+  }
+
+  // ==================== OBTENER TODAS LAS COTIZACIONES ====================
+  Future<List<Quotation>> getAllQuotations({String? statusFilter}) async {
+    try {
+      final response = await _supabase
+          .from('quotations')
+          .select()
+          .order('created_at', ascending: false);
+
+      final quotations =
+          (response as List).map((item) => Quotation.fromJson(item)).toList();
+
+      if (statusFilter != null && statusFilter != 'all') {
+        return quotations.where((q) => q.status.name == statusFilter).toList();
+      }
+      return quotations;
+    } catch (e) {
+      debugPrint('Error fetching quotations: $e');
+      return [];
+    }
+  }
+
+  // ==================== OBTENER TODAS LAS TRANSACCIONES ====================
+  Future<List<PaymentTransaction>> getAllTransactions(
+      {String? statusFilter}) async {
+    try {
+      final response = await _supabase
+          .from('payment_transactions')
+          .select()
+          .order('transaction_date', ascending: false);
+
+      final payments = (response as List)
+          .map((item) => PaymentTransaction.fromJson(item))
+          .toList();
+
+      if (statusFilter != null && statusFilter != 'all') {
+        return payments.where((p) => p.status == statusFilter).toList();
+      }
+      return payments;
+    } catch (e) {
+      debugPrint('Error fetching transactions: $e');
+      return [];
+    }
+  }
+
+  Future<dynamic> getAllUsers({required String roleFilter}) async {}
 }

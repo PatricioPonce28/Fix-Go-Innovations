@@ -32,17 +32,8 @@ class _EnhancedPaymentScreenState extends State<EnhancedPaymentScreen> {
     setState(() => _isProcessing = true);
 
     try {
-      // Obtener tokenization key (configurar en env)
-      const tokenizationKey = 'YOUR_BRAINTREE_TOKENIZATION_KEY';
-
-      if (tokenizationKey.isEmpty || tokenizationKey == 'YOUR_BRAINTREE_TOKENIZATION_KEY') {
-        _showErrorDialog(
-          'Error de Configuración',
-          'La clave de tokenización de Braintree no está configurada',
-        );
-        setState(() => _isProcessing = false);
-        return;
-      }
+      // 🔑 Clave de tokenización de Braintree (Sandbox)
+      const tokenizationKey = 'sandbox_pjypmnzx_54phx4kqg59jj2r8';
 
       var request = BraintreeDropInRequest(
         tokenizationKey: tokenizationKey,
@@ -187,11 +178,10 @@ class _EnhancedPaymentScreenState extends State<EnhancedPaymentScreen> {
               title: '💳 Tarjeta de Crédito/Débito',
               subtitle: 'Visa, Mastercard, American Express, PayPal',
               icon: Icons.credit_card,
-              isSelected: _selectedPaymentMethod ==
-                  PaymentMethodType.braintree,
+              isSelected: _selectedPaymentMethod == PaymentMethodType.braintree,
               onTap: () {
-                setState(() => _selectedPaymentMethod =
-                    PaymentMethodType.braintree);
+                setState(
+                    () => _selectedPaymentMethod = PaymentMethodType.braintree);
               },
             ),
 
